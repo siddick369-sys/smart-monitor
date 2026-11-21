@@ -1,0 +1,1515 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMART SECURITY MONITOR — Console Professionnelle de Surveillance</title>
+    <!-- PWA & Mobile Web App Meta -->
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#0b0f19">
+    <link rel="icon" type="image/svg+xml" href="/static/icons/icon.svg">
+    <link rel="apple-touch-icon" href="/static/icons/icon.svg">
+    <!-- Tailwind CSS CDN pour un design moderne et responsive -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#0b0f19',
+                        cardBg: '#151d2e',
+                        cardBorder: '#23304a',
+                        brandBlue: '#0284c7',
+                        alarmRed: '#ef4444'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-darkBg text-slate-100 min-h-screen flex flex-col font-sans select-none">
+
+    <!-- Audio pour sirène dans le navigateur (optionnel si haut-parleurs PC coupés) -->
+    <audio id="browserSirenAudio" src="/static/audio/siren.wav" loop preload="auto"></audio>
+
+    <!-- BANNIÈRE PERMANENTE MODE DÉMONSTRATION -->
+    <div id="demoModeBanner" class="hidden bg-amber-500/20 border-b border-amber-500/40 text-amber-300 px-6 py-2 flex items-center justify-between text-xs font-bold uppercase tracking-wider sticky top-0 z-40 backdrop-blur-sm">
+        <span class="flex items-center gap-2">
+            <i class="fa-solid fa-flask-vial animate-bounce text-sm"></i>
+            <span>MODE DÉMONSTRATION UNIVERSITAIRE — ÉVÉNEMENTS SIMULÉS ACTIFS</span>
+        </span>
+        <div class="flex items-center space-x-2">
+            <button onclick="openDemoWalkthrough()" class="bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold px-3 py-1 rounded text-xs transition">
+                <i class="fa-solid fa-list-check mr-1"></i> Scénario Jury (5 min)
+            </button>
+            <button onclick="toggleDemoMode(false)" class="bg-slate-800 hover:bg-slate-700 text-amber-200 px-2.5 py-1 rounded text-xs transition">
+                Désactiver
+            </button>
+        </div>
+    </div>
+
+    <!-- BANNIÈRE D'ALERTE D'URGENCE (incident actif) -->
+    <div id="alarmBanner" class="hidden bg-red-600 text-white px-6 py-3.5 shadow-2xl flex items-center justify-between border-b-2 border-red-400 animate-pulse sticky top-0 z-50">
+        <div class="flex items-center space-x-3">
+            <i class="fa-solid fa-triangle-exclamation text-2xl text-yellow-300"></i>
+            <div>
+                <span class="font-extrabold tracking-wide uppercase text-base">ALERTE INTRUSION DÉTECTÉE !</span>
+                <span id="alarmBannerDetails" class="ml-3 text-sm text-red-100 font-medium"></span>
+            </div>
+        </div>
+        <div class="flex space-x-2">
+            <button onclick="stopSiren()" class="bg-white text-red-700 hover:bg-red-50 font-bold px-4 py-1.5 rounded-lg text-xs shadow transition flex items-center space-x-1">
+                <i class="fa-solid fa-volume-xmark"></i>
+                <span>ARRÊTER LA SIRÈNE</span>
+            </button>
+            <button onclick="resetAlarm()" class="bg-red-800 hover:bg-red-900 text-white font-semibold px-3 py-1.5 rounded-lg text-xs transition">
+                <i class="fa-solid fa-check"></i>
+                <span>ACQUITTER</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- EN-TÊTE PRINCIPAL (CONSOLE DE SUPERVISION) -->
+    <header class="bg-cardBg border-b border-cardBorder px-6 py-3.5 flex flex-wrap items-center justify-between gap-4 shadow-md">
+        <div class="flex items-center space-x-3">
+            <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-blue-700 to-cyan-500 flex items-center justify-center text-xl text-white shadow-lg">
+                <i class="fa-solid fa-shield-halved"></i>
+            </div>
+            <div>
+                <h1 class="text-lg font-extrabold tracking-wider text-slate-100 flex items-center gap-2">
+                    SMART SECURITY MONITOR
+                    <span class="text-[11px] bg-blue-900/60 text-cyan-300 border border-blue-700/50 px-2 py-0.5 rounded font-mono font-semibold">PRO EDITION</span>
+                </h1>
+                <p class="text-[11px] text-slate-400">Monitoring Host Logiciel • Réseau Distribué Smartphones Android</p>
+            </div>
+        </div>
+
+        <!-- CONTRÔLES GLOBAUX DU SYSTÈME -->
+        <div class="flex flex-wrap items-center gap-2">
+            <!-- État d'armement -->
+            <button id="btnArmToggle" onclick="toggleArm()" class="px-4 py-2 rounded-lg font-bold text-xs flex items-center space-x-2 transition shadow">
+                <i id="armIcon" class="fa-solid fa-shield"></i>
+                <span id="armText">CHARGEMENT...</span>
+            </button>
+
+            <!-- Arrêt sirène -->
+            <button id="btnStopSiren" onclick="stopSiren()" class="hidden bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg text-xs font-bold transition flex items-center space-x-1 shadow animate-pulse">
+                <i class="fa-solid fa-volume-xmark"></i>
+                <span>MUTE SIRÈNE</span>
+            </button>
+
+            <!-- Test sirène -->
+            <button onclick="testAlarm()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded-lg text-xs font-semibold transition flex items-center space-x-1 border border-cardBorder">
+                <i class="fa-solid fa-bell"></i>
+                <span>TEST SIRÈNE</span>
+            </button>
+
+            <!-- Menu Simuler incident -->
+            <div class="relative inline-block text-left">
+                <button onclick="toggleSimMenu()" class="bg-purple-700 hover:bg-purple-600 text-white px-3 py-2 rounded-lg text-xs font-bold transition flex items-center space-x-1 shadow">
+                    <i class="fa-solid fa-flask"></i>
+                    <span>SIMULER</span>
+                    <i class="fa-solid fa-chevron-down text-[10px] ml-1"></i>
+                </button>
+                <div id="simDropdown" class="hidden absolute right-0 mt-2 w-60 rounded-lg shadow-2xl bg-cardBg border border-cardBorder z-50 py-1 text-xs">
+                    <button onclick="triggerSimulated('MOUVEMENT_VIDÉO')" class="w-full text-left px-4 py-2 hover:bg-slate-800 text-slate-200 flex items-center space-x-2">
+                        <i class="fa-solid fa-person-walking text-blue-400"></i>
+                        <span>Mouvement Vidéo OpenCV</span>
+                    </button>
+                    <button onclick="triggerSimulated('ACOUSTIQUE')" class="w-full text-left px-4 py-2 hover:bg-slate-800 text-slate-200 flex items-center space-x-2">
+                        <i class="fa-solid fa-volume-high text-yellow-400"></i>
+                        <span>Bris de vitre / Son fort</span>
+                    </button>
+                    <button onclick="triggerSimulated('PROXIMITÉ')" class="w-full text-left px-4 py-2 hover:bg-slate-800 text-slate-200 flex items-center space-x-2">
+                        <i class="fa-solid fa-hand text-emerald-400"></i>
+                        <span>Obstacle Proximité (&le; 5cm)</span>
+                    </button>
+                    <button onclick="triggerSimulated('CHOC_ACCÉLÉROMÈTRE')" class="w-full text-left px-4 py-2 hover:bg-slate-800 text-slate-200 flex items-center space-x-2">
+                        <i class="fa-solid fa-mobile-screen text-red-400"></i>
+                        <span>Secousse Accéléromètre</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Bascule Mode Démo -->
+            <button id="btnToggleDemo" onclick="toggleDemoMode()" class="bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-600/40 px-3 py-2 rounded-lg text-xs font-semibold transition" title="Activer / Désactiver le Mode Démonstration">
+                <i class="fa-solid fa-graduation-cap"></i> Mode Démo
+            </button>
+
+            <!-- CENTRE DE NOTIFICATIONS INTELLIGENTES -->
+            <div class="relative inline-block text-left">
+                <button id="btnNotifToggle" onclick="toggleNotificationCenter()" class="relative bg-slate-800 hover:bg-slate-700 text-slate-200 border border-cardBorder px-3 py-2 rounded-lg text-xs font-semibold transition" title="Centre de notifications">
+                    <i class="fa-solid fa-bell"></i>
+                    <span id="notifBadge" class="hidden absolute -top-1.5 -right-1.5 bg-red-600 text-white font-bold rounded-full h-4 w-4 flex items-center justify-center text-[9px] animate-pulse">0</span>
+                </button>
+                <div id="notifDrawer" class="hidden absolute right-0 mt-2 w-80 md:w-96 rounded-xl shadow-2xl bg-cardBg border border-cardBorder z-50 overflow-hidden text-xs">
+                    <div class="p-3 bg-slate-900 border-b border-cardBorder flex items-center justify-between">
+                        <span class="font-bold text-slate-100 flex items-center gap-1.5">
+                            <i class="fa-solid fa-bell text-blue-400"></i> Notifications
+                        </span>
+                        <div class="flex items-center gap-2">
+                            <button onclick="markAllNotificationsRead()" class="text-[11px] text-cyan-400 hover:underline">Tout marquer lu</button>
+                            <button onclick="toggleNotificationCenter()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                    </div>
+                    <div id="notifListContainer" class="max-h-72 overflow-y-auto divide-y divide-cardBorder p-1">
+                        <div class="text-center py-6 text-slate-500">Aucune notification récente.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Guide TP / Architecture -->
+            <button onclick="openGuideModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-cardBorder px-3 py-2 rounded-lg text-xs transition" title="Guide universitaire & architecture">
+                <i class="fa-solid fa-book-bookmark"></i>
+            </button>
+
+            <!-- Bouton Installation PWA (affiché dynamiquement si disponible) -->
+            <button id="btnInstallPwa" onclick="installPWA()" class="hidden bg-cyan-700 hover:bg-cyan-600 text-white font-bold px-3 py-2 rounded-lg text-xs transition flex items-center space-x-1 shadow animate-pulse" title="Installer l'application PWA sur cet appareil">
+                <i class="fa-solid fa-download"></i>
+                <span>Installer PWA</span>
+            </button>
+
+            <!-- Bouton Sécurité 2FA TOTP -->
+            <button onclick="open2FAModal()" class="bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-800/60 px-3 py-2 rounded-lg text-xs font-semibold transition flex items-center space-x-1" title="Configuration de la sécurité 2FA TOTP">
+                <i class="fa-solid fa-key text-cyan-400"></i>
+                <span>2FA</span>
+            </button>
+
+            <!-- Bouton Audit SIEM -->
+            <button onclick="openSiemModal()" class="bg-slate-800 hover:bg-slate-700 text-purple-300 border border-purple-800/60 px-3 py-2 rounded-lg text-xs font-semibold transition flex items-center space-x-1" title="Journal de sécurité Syslog / CEF">
+                <i class="fa-solid fa-shield-virus text-purple-400"></i>
+                <span>SIEM</span>
+            </button>
+
+            <!-- Profil & Session Utilisateur -->
+            <div id="userSessionContainer" class="flex items-center space-x-2 bg-slate-900/80 border border-cardBorder px-2.5 py-1.5 rounded-lg text-xs">
+                <i class="fa-solid fa-user-shield text-cyan-400"></i>
+                <span id="navUsername" class="font-bold text-slate-200">admin</span>
+                <span id="navRoleBadge" class="bg-blue-900/60 text-blue-300 border border-blue-700/50 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold">ADMIN</span>
+                <button type="button" onclick="performLogout()" class="ml-1 text-slate-400 hover:text-red-400 transition" title="Se déconnecter">
+                    <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- CORPS PRINCIPAL DU DASHBOARD -->
+    <main class="flex-1 p-6 space-y-6 max-w-7xl mx-auto w-full">
+
+        <!-- 1. VUE GÉNÉRALE — TABLEAU DE BORD KPI PRINCIPAL -->
+        <section class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3.5">
+            <!-- État Général de Surveillance -->
+            <div class="bg-cardBg border border-cardBorder rounded-xl p-3.5 flex flex-col justify-between shadow-sm">
+                <div class="text-[11px] text-slate-400 uppercase font-semibold flex items-center justify-between">
+                    <span>État Général</span>
+                    <span id="dotGeneralState" class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
+                </div>
+                <div id="statGeneralState" class="text-base font-extrabold text-emerald-400 mt-2">OPÉRATIONNEL</div>
+                <div id="statGeneralSub" class="text-[10px] text-slate-500 mt-0.5">Surveillance active</div>
+            </div>
+
+            <!-- Smartphones Connectés -->
+            <div class="bg-cardBg border border-cardBorder rounded-xl p-3.5 flex flex-col justify-between shadow-sm">
+                <div class="text-[11px] text-slate-400 uppercase font-semibold flex items-center justify-between">
+                    <span>Appareils</span>
+                    <i class="fa-solid fa-mobile-screen text-blue-400 text-xs"></i>
+                </div>
+                <div id="statDevicesCount" class="text-base font-extrabold text-blue-400 mt-2">0 / 0</div>
+                <div id="statDevicesSub" class="text-[10px] text-slate-500 mt-0.5">0 connectés • 0 déconnectés</div>
+            </div>
+
+            <!-- Capteurs Actifs -->
+            <div class="bg-cardBg border border-cardBorder rounded-xl p-3.5 flex flex-col justify-between shadow-sm">
+                <div class="text-[11px] text-slate-400 uppercase font-semibold flex items-center justify-between">
+                    <span>Capteurs Actifs</span>
+                    <i class="fa-solid fa-microchip text-cyan-400 text-xs"></i>
+                </div>
+                <div id="statSensorsCount" class="text-base font-extrabold text-cyan-400 mt-2">0</div>
+                <div class="text-[10px] text-slate-500 mt-0.5">Télémétrie en direct</div>
+            </div>
+
+            <!-- Alertes Aujourd'hui -->
+            <div class="bg-cardBg border border-cardBorder rounded-xl p-3.5 flex flex-col justify-between shadow-sm">
+                <div class="text-[11px] text-slate-400 uppercase font-semibold flex items-center justify-between">
+                    <span>Alertes Aujourd'hui</span>
+                    <i class="fa-solid fa-calendar-day text-purple-400 text-xs"></i>
+                </div>
+                <div id="statAlertsToday" class="text-base font-extrabold text-purple-400 mt-2">0</div>
+                <div id="statAlertsTotal" class="text-[10px] text-slate-500 mt-0.5">Total en historique: 0</div>
+            </div>
+
+            <!-- Dernier Incident -->
+            <div class="bg-cardBg border border-cardBorder rounded-xl p-3.5 flex flex-col justify-between shadow-sm col-span-2 md:col-span-1">
+                <div class="text-[11px] text-slate-400 uppercase font-semibold flex items-center justify-between">
+                    <span>Dernier Incident</span>
+                    <i class="fa-solid fa-clock text-amber-400 text-xs"></i>
+                </div>
+                <div id="statLastIncidentType" class="text-xs font-bold text-slate-200 mt-2 truncate">Aucun</div>
+                <div id="statLastIncidentTime" class="text-[10px] text-slate-500 mt-0.5">--:--:--</div>
+            </div>
+
+            <!-- Sirène PC -->
+            <div class="bg-cardBg border border-cardBorder rounded-xl p-3.5 flex flex-col justify-between shadow-sm">
+                <div class="text-[11px] text-slate-400 uppercase font-semibold flex items-center justify-between">
+                    <span>Sirène PC</span>
+                    <i id="statSirenIcon" class="fa-solid fa-bullhorn text-slate-500 text-xs"></i>
+                </div>
+                <div id="statSirenText" class="text-base font-extrabold text-slate-400 mt-2">VEILLE</div>
+                <div class="text-[10px] text-slate-500 mt-0.5">winsound asynchrone</div>
+            </div>
+
+            <!-- Espace Stockage -->
+            <div class="bg-cardBg border border-cardBorder rounded-xl p-3.5 flex flex-col justify-between shadow-sm col-span-2 md:col-span-1">
+                <div class="text-[11px] text-slate-400 uppercase font-semibold flex items-center justify-between">
+                    <span>Stockage Preuves</span>
+                    <i class="fa-solid fa-hard-drive text-emerald-400 text-xs"></i>
+                </div>
+                <div id="statStorageText" class="text-xs font-bold text-slate-200 mt-2">0 Mo / 1024 Mo</div>
+                <div class="w-full bg-slate-800 rounded-full h-1.5 mt-1 overflow-hidden">
+                    <div id="statStorageBar" class="bg-cyan-500 h-1.5 rounded-full" style="width: 1%"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SERVICES AVANCÉS PRO-05 : IA VISUELLE • CRYPTOGRAPHIE • TELEGRAM • SQLITE -->
+        <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- 1. IA Visuelle Qwen Vision via xKiro Free Tier -->
+            <div class="bg-cardBg border border-cardBorder rounded-xl p-4 shadow-sm flex flex-col justify-between space-y-2">
+                <div class="flex items-center justify-between border-b border-cardBorder pb-2">
+                    <span class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                        <i class="fa-solid fa-brain text-purple-400"></i> Qwen Vision IA
+                    </span>
+                    <span id="qwenStatusBadge" class="text-[10px] px-2 py-0.5 rounded font-bold font-mono bg-emerald-950 text-emerald-300 border border-emerald-800">FREE_TIER_VERIFIED</span>
+                </div>
+                <div class="text-[11px] text-slate-400 space-y-1">
+                    <div class="flex justify-between">
+                        <span>Modèle :</span>
+                        <span id="qwenModelName" class="font-mono text-slate-200 truncate max-w-[140px]">Qwen-VL-Free</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Dernière analyse :</span>
+                        <span id="qwenLastResult" class="text-slate-300 font-semibold truncate max-w-[130px]">En attente</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Inférences :</span>
+                        <span id="qwenInferenceCount" class="font-mono text-cyan-400">0</span>
+                    </div>
+                </div>
+                <div class="pt-2 border-t border-cardBorder flex items-center justify-between">
+                    <span class="text-[10px] text-slate-500">Tier Gratuit xKiro</span>
+                    <button id="btnToggleQwen" onclick="toggleQwenVision()" class="text-[11px] bg-purple-900/50 hover:bg-purple-800 text-purple-200 border border-purple-700/50 px-2 py-1 rounded transition">
+                        Bascule IA / OpenCV
+                    </button>
+                </div>
+            </div>
+
+            <!-- 2. Intégrité Cryptographique SHA-256 -->
+            <div class="bg-cardBg border border-cardBorder rounded-xl p-4 shadow-sm flex flex-col justify-between space-y-2">
+                <div class="flex items-center justify-between border-b border-cardBorder pb-2">
+                    <span class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                        <i class="fa-solid fa-link text-emerald-400"></i> Intégrité SHA-256
+                    </span>
+                    <span class="text-[10px] px-2 py-0.5 rounded font-bold font-mono bg-emerald-950 text-emerald-300 border border-emerald-800">SHA-256 CHAIN</span>
+                </div>
+                <div class="text-[11px] text-slate-400 space-y-1">
+                    <div class="flex justify-between">
+                        <span>Chaîne des blocs :</span>
+                        <span id="integrityChainCount" class="font-mono text-emerald-400 font-bold">Vérifiée</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Signature HMAC :</span>
+                        <span class="text-slate-300 font-mono">SHA-256 actif</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Preuves scellées :</span>
+                        <span id="integrityEvidenceCount" class="font-mono text-cyan-400">0 fichiers</span>
+                    </div>
+                </div>
+                <div class="pt-2 border-t border-cardBorder text-right">
+                    <span class="text-[10px] text-slate-500">Scellage automatique à l'écriture</span>
+                </div>
+            </div>
+
+            <!-- 3. Notifications Telegram Bot -->
+            <div class="bg-cardBg border border-cardBorder rounded-xl p-4 shadow-sm flex flex-col justify-between space-y-2">
+                <div class="flex items-center justify-between border-b border-cardBorder pb-2">
+                    <span class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                        <i class="fa-brands fa-telegram text-blue-400"></i> Bot Telegram
+                    </span>
+                    <span id="telegramStatusBadge" class="text-[10px] px-2 py-0.5 rounded font-bold font-mono bg-slate-800 text-slate-400 border border-slate-700">DÉSACTIVÉ</span>
+                </div>
+                <div class="text-[11px] text-slate-400 space-y-1">
+                    <div class="flex justify-between">
+                        <span>Chat ID :</span>
+                        <span id="telegramChatId" class="font-mono text-slate-300 truncate max-w-[130px]">Non configuré</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Alertes transmises :</span>
+                        <span id="telegramSentCount" class="font-mono text-blue-400 font-bold">0</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Canal :</span>
+                        <span class="text-slate-400">Asynchrone non-bloquant</span>
+                    </div>
+                </div>
+                <div class="pt-2 border-t border-cardBorder flex items-center justify-between">
+                    <span class="text-[10px] text-slate-500">Anti-rebond actif</span>
+                    <button onclick="testTelegram()" class="text-[11px] bg-blue-900/50 hover:bg-blue-800 text-blue-200 border border-blue-700/50 px-2 py-1 rounded transition">
+                        <i class="fa-solid fa-paper-plane mr-1"></i> Test
+                    </button>
+                </div>
+            </div>
+
+            <!-- 4. Base de Données SQLite & Migration -->
+            <div class="bg-cardBg border border-cardBorder rounded-xl p-4 shadow-sm flex flex-col justify-between space-y-2">
+                <div class="flex items-center justify-between border-b border-cardBorder pb-2">
+                    <span class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                        <i class="fa-solid fa-database text-cyan-400"></i> SQLite 3 & WAL
+                    </span>
+                    <span class="text-[10px] px-2 py-0.5 rounded font-bold font-mono bg-cyan-950 text-cyan-300 border border-cyan-800">ACID + WAL</span>
+                </div>
+                <div class="text-[11px] text-slate-400 space-y-1">
+                    <div class="flex justify-between">
+                        <span>Enregistrements :</span>
+                        <span id="dbRecordCounts" class="font-mono text-cyan-300 font-bold">0 alertes • 0 appareils</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Mode persistance :</span>
+                        <span class="text-slate-300">Dual SQLite / JSON</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Sauvegardes :</span>
+                        <span class="text-slate-400 font-mono">storage/backups</span>
+                    </div>
+                </div>
+                <div class="pt-2 border-t border-cardBorder flex items-center justify-between">
+                    <a href="/api/database/export" target="_blank" class="text-[11px] text-slate-300 hover:text-white underline">
+                        Export JSON
+                    </a>
+                    <button onclick="triggerMigration()" class="text-[11px] bg-cyan-900/50 hover:bg-cyan-800 text-cyan-200 border border-cyan-700/50 px-2 py-1 rounded transition">
+                        Synchroniser
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION ÉVOLUTION MAJEURE PRO-06 : EDGE AI • GEOFENCING • 2FA/SIEM • WEBRTC • PWA -->
+        <section class="space-y-3">
+            <div class="flex items-center justify-between border-b border-cardBorder pb-2">
+                <div class="flex items-center space-x-2">
+                    <span class="h-2 w-2 rounded-full bg-cyan-400"></span>
+                    <h2 class="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                        <span>Évolutions Majeures PRO-06</span>
+                        <span class="text-[10px] bg-cyan-950 text-cyan-300 border border-cyan-800 px-1.5 py-0.5 rounded font-mono font-bold">EDGE AI &bull; GEOFENCING &bull; 2FA/SIEM &bull; WEBRTC &bull; PWA</span>
+                    </h2>
+                </div>
+                <span class="text-[11px] text-slate-500 font-medium">Exécution locale Windows &bull; Architecture Zero-Trust</span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- 1. Edge AI (YOLOv8-Nano / ONNX) -->
+                <div class="bg-cardBg border border-cardBorder rounded-xl p-4 shadow-sm flex flex-col justify-between space-y-2">
+                    <div class="flex items-center justify-between border-b border-cardBorder pb-2">
+                        <span class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                            <i class="fa-solid fa-microchip text-cyan-400"></i> Edge AI YOLOv8
+                        </span>
+                        <span id="edgeAiBadge" class="text-[10px] px-2 py-0.5 rounded font-bold font-mono bg-cyan-950 text-cyan-300 border border-cyan-800">OPENCV_ONLY</span>
+                    </div>
+                    <div class="text-[11px] text-slate-400 space-y-1.5">
+                        <div class="flex justify-between items-center">
+                            <span>Politique :</span>
+                            <select id="edgeAiModeSelect" onchange="changeEdgeAiMode(this.value)" class="bg-slate-900 border border-slate-700 text-cyan-300 text-[11px] rounded px-2 py-0.5 focus:outline-none focus:border-cyan-500">
+                                <option value="OPENCV_ONLY">OPENCV_ONLY (Défaut)</option>
+                                <option value="EDGE_AI_ASSISTED">EDGE_AI_ASSISTED</option>
+                                <option value="EDGE_AI_REQUIRED">EDGE_AI_REQUIRED</option>
+                            </select>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Modèle ONNX :</span>
+                            <span id="edgeAiModelStatus" class="font-mono text-slate-300 truncate max-w-[140px]">yolov8n.onnx (CPU)</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Objets cibles :</span>
+                            <span class="text-slate-300 font-mono text-[10px]">person, car, bike, dog, cat</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Inférences exécutées :</span>
+                            <span id="edgeAiInferenceCount" class="font-mono text-cyan-400 font-bold">0</span>
+                        </div>
+                    </div>
+                    <div class="pt-2 border-t border-cardBorder flex items-center justify-between">
+                        <span class="text-[10px] text-slate-500">Inférence locale CPU ONNX</span>
+                        <span id="edgeAiFilterCount" class="text-[10px] font-mono text-slate-400">0 filtrés</span>
+                    </div>
+                </div>
+
+                <!-- 2. Geofencing & Présence Réseau -->
+                <div class="bg-cardBg border border-cardBorder rounded-xl p-4 shadow-sm flex flex-col justify-between space-y-2">
+                    <div class="flex items-center justify-between border-b border-cardBorder pb-2">
+                        <span class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                            <i class="fa-solid fa-location-crosshairs text-emerald-400"></i> Géofencing & Présence
+                        </span>
+                        <span id="presenceStateBadge" class="text-[10px] px-2 py-0.5 rounded font-bold font-mono bg-emerald-950 text-emerald-300 border border-emerald-800">HOME</span>
+                    </div>
+                    <div class="text-[11px] text-slate-400 space-y-1">
+                        <div class="flex justify-between">
+                            <span>État réseau :</span>
+                            <span id="presenceStateText" class="font-bold text-slate-200">À DOMICILE (HOME)</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Appareils sur le LAN :</span>
+                            <span id="presenceDeviceCount" class="font-mono text-emerald-400 font-bold">0 / 0 présents</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Période de grâce :</span>
+                            <span id="presenceGraceInfo" class="font-mono text-slate-400">120 s anti-flapping</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Sécurité désarmement :</span>
+                            <span class="text-slate-300 font-mono text-[10px]">Dérogation requise</span>
+                        </div>
+                    </div>
+                    <div class="pt-2 border-t border-cardBorder flex items-center justify-between">
+                        <button onclick="openPresenceModal()" class="text-[11px] bg-emerald-900/50 hover:bg-emerald-800 text-emerald-200 border border-emerald-700/50 px-2 py-1 rounded transition">
+                            <i class="fa-solid fa-network-wired mr-1"></i> Appareils LAN
+                        </button>
+                        <button onclick="overridePresence('MANUAL')" class="text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-2 py-1 rounded transition" title="Activer / Désactiver la dérogation manuelle">
+                            Dérogation
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 3. Authentification TOTP (2FA) & Audit SIEM -->
+                <div class="bg-cardBg border border-cardBorder rounded-xl p-4 shadow-sm flex flex-col justify-between space-y-2">
+                    <div class="flex items-center justify-between border-b border-cardBorder pb-2">
+                        <span class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                            <i class="fa-solid fa-shield-halved text-purple-400"></i> Sécurité 2FA & SIEM
+                        </span>
+                        <span id="totpGlobalBadge" class="text-[10px] px-2 py-0.5 rounded font-bold font-mono bg-purple-950 text-purple-300 border border-purple-800">RFC 6238 + CEF</span>
+                    </div>
+                    <div class="text-[11px] text-slate-400 space-y-1">
+                        <div class="flex justify-between">
+                            <span>2FA TOTP Admin :</span>
+                            <span id="totpStatusText" class="font-bold text-slate-300">Configurable</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Codes de secours :</span>
+                            <span class="text-slate-400 font-mono">5 jetons hachés</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Journal SIEM :</span>
+                            <span id="siemFormatText" class="font-mono text-purple-400 font-bold">CEF / RFC 5424</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Masquage clés :</span>
+                            <span class="text-emerald-400 font-semibold">Actif (anti-fuite)</span>
+                        </div>
+                    </div>
+                    <div class="pt-2 border-t border-cardBorder flex items-center justify-between">
+                        <button onclick="open2FAModal()" class="text-[11px] bg-purple-900/50 hover:bg-purple-800 text-purple-200 border border-purple-700/50 px-2 py-1 rounded transition">
+                            <i class="fa-solid fa-qrcode mr-1"></i> Gérer 2FA
+                        </button>
+                        <button onclick="openSiemModal()" class="text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-2 py-1 rounded transition">
+                            <i class="fa-solid fa-list-check mr-1"></i> Logs SIEM
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 4. WebRTC Streaming & PWA Web Push -->
+                <div class="bg-cardBg border border-cardBorder rounded-xl p-4 shadow-sm flex flex-col justify-between space-y-2">
+                    <div class="flex items-center justify-between border-b border-cardBorder pb-2">
+                        <span class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                            <i class="fa-solid fa-tower-broadcast text-blue-400"></i> WebRTC & PWA Push
+                        </span>
+                        <span id="webrtcBadge" class="text-[10px] px-2 py-0.5 rounded font-bold font-mono bg-blue-950 text-blue-300 border border-blue-800">PWA + MJPEG</span>
+                    </div>
+                    <div class="text-[11px] text-slate-400 space-y-1">
+                        <div class="flex justify-between">
+                            <span>Streaming vidéo :</span>
+                            <span id="webrtcStreamingMode" class="text-slate-300 font-semibold">MJPEG Résilient</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Signalisation WebRTC :</span>
+                            <span class="text-slate-400 font-mono">SDP / ICE prêt</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Service Worker :</span>
+                            <span id="pwaSwStatus" class="font-mono text-emerald-400 font-bold">Enregistré</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Notifications Web Push :</span>
+                            <span id="pwaPushCount" class="font-mono text-cyan-400">0 abonnés</span>
+                        </div>
+                    </div>
+                    <div class="pt-2 border-t border-cardBorder flex items-center justify-between">
+                        <button onclick="toggleWebPushSubscription()" id="btnPushToggle" class="text-[11px] bg-blue-900/50 hover:bg-blue-800 text-blue-200 border border-blue-700/50 px-2 py-1 rounded transition">
+                            <i class="fa-solid fa-bell mr-1"></i> Web Push
+                        </button>
+                        <button onclick="testWebPush()" class="text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-2 py-1 rounded transition">
+                            Test Push
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION ÉVOLUTION MAJEURE PRO-07 À PRO-11 : SUITE SÉCURITÉ DE CLASSE ENTREPRISE -->
+        <section class="space-y-4">
+            <div class="flex items-center justify-between border-b border-cardBorder pb-2">
+                <div class="flex items-center space-x-2">
+                    <span class="h-2 w-2 rounded-full bg-purple-400"></span>
+                    <h2 class="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                        <span>Suite Sécurité Avancée PRO-07 &bull; PRO-11</span>
+                        <span class="text-[10px] bg-purple-950 text-purple-300 border border-purple-800 px-1.5 py-0.5 rounded font-mono font-bold">ANTI-TAMPER &bull; AUDIO AI &bull; SEMANTIC &bull; FORENSIC &bull; SPATIAL &bull; P2P &bull; DEFENSE</span>
+                    </h2>
+                </div>
+                <span class="text-[11px] text-slate-500 font-medium">Capacités supérieures aux NVRs commerciaux</span>
+            </div>
+
+            <!-- Grille des 3 Domaines Stratégiques -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                
+                <!-- CARTE 1 : RECHERCHE VIDÉO SÉMANTIQUE (PRO-08) -->
+                <div class="bg-cardBg border border-cardBorder rounded-xl p-4 shadow-sm flex flex-col justify-between space-y-3 lg:col-span-1">
+                    <div class="flex items-center justify-between border-b border-cardBorder pb-2">
+                        <span class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                            <i class="fa-solid fa-magnifying-glass text-cyan-400"></i> Recherche Sémantique
+                        </span>
+                        <span id="semanticBadge" class="text-[10px] px-2 py-0.5 rounded font-bold font-mono bg-cyan-950 text-cyan-300 border border-cyan-800">VECTOR EMBEDDINGS</span>
+                    </div>
+                    <p class="text-[11px] text-slate-400">Interrogez vos archives vidéo en langage naturel :</p>
+                    <div class="flex gap-2">
+                        <input type="text" id="semanticSearchInput" placeholder="ex: personne en rouge, véhicule..." class="flex-1 bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white">
+                        <button onclick="executeSemanticSearch()" class="bg-cyan-600 hover:bg-cyan-500 text-white font-bold px-3 py-1.5 rounded text-xs transition">
+                            <i class="fa-solid fa-search"></i>
+                        </button>
+                    </div>
+                    <div id="semanticResultsContainer" class="max-h-40 overflow-y-auto space-y-1.5 divide-y divide-slate-800 text-[11px]">
+                        <div class="text-slate-500 text-center py-4">Entrez une description pour rechercher.</div>
+                    </div>
+                    <div class="pt-2 border-t border-cardBorder flex items-center justify-between">
+                        <span class="text-[10px] text-slate-500">Modèle Perceptuel / Cosinus</span>
+                        <button onclick="triggerReindexSemantic()" class="text-[11px] text-cyan-400 hover:underline">Réindexer tout</button>
+                    </div>
+                </div>
+
+                <!-- CARTE 2 : ANTI-SABOTAGE (TAMPER) & CLASSIFICATION AUDIO AI (PRO-07) -->
+                <div class="bg-cardBg border border-cardBorder rounded-xl p-4 shadow-sm flex flex-col justify-between space-y-3 lg:col-span-1">
+                    <div class="flex items-center justify-between border-b border-cardBorder pb-2">
+                        <span class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                            <i class="fa-solid fa-shield-virus text-amber-400"></i> Anti-Sabotage & Audio AI
+                        </span>
+                        <span id="tamperBadge" class="text-[10px] px-2 py-0.5 rounded font-bold font-mono bg-amber-950 text-amber-300 border border-amber-800">7 VECTEURS ACTIFS</span>
+                    </div>
+                    <div class="text-[11px] text-slate-400 space-y-1">
+                        <div class="flex justify-between">
+                            <span>Obstruction / Dégradation :</span>
+                            <span id="tamperStatusSummary" class="text-emerald-400 font-semibold font-mono">NORMAL</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Détection Acoustique :</span>
+                            <span id="audioClassifierEngine" class="text-slate-300 font-mono">SPECTRAL_HEURISTIC</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Dernière menace sonore :</span>
+                            <span id="audioLastThreat" class="text-slate-400">Aucune</span>
+                        </div>
+                    </div>
+                    <div class="bg-slate-900/60 p-2 rounded border border-cardBorder space-y-1.5">
+                        <span class="text-[10px] font-bold text-slate-300 uppercase">Sonde Sonore de Test (Simulation) :</span>
+                        <div class="grid grid-cols-3 gap-1 text-[10px]">
+                            <button onclick="testAudioProbe('SCREAM')" class="bg-red-900/50 hover:bg-red-800 text-red-200 px-2 py-1 rounded">Cri</button>
+                            <button onclick="testAudioProbe('GLASS_BREAK')" class="bg-amber-900/50 hover:bg-amber-800 text-amber-200 px-2 py-1 rounded">Vitre</button>
+                            <button onclick="testAudioProbe('ALARM_SIREN')" class="bg-purple-900/50 hover:bg-purple-800 text-purple-200 px-2 py-1 rounded">Sirène</button>
+                        </div>
+                    </div>
+                    <div class="pt-2 border-t border-cardBorder flex items-center justify-between">
+                        <span class="text-[10px] text-slate-500">Anti-aveuglement & bris</span>
+                        <button onclick="resolveAllTamper()" class="text-[11px] text-amber-400 hover:underline">Acquitter Sabotage</button>
+                    </div>
+                </div>
+
+                <!-- CARTE 3 : INTERPHONE WEBRTC & DÉFENSE ACTIVE (PRO-11) -->
+                <div class="bg-cardBg border border-cardBorder rounded-xl p-4 shadow-sm flex flex-col justify-between space-y-3 lg:col-span-1">
+                    <div class="flex items-center justify-between border-b border-cardBorder pb-2">
+                        <span class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                            <i class="fa-solid fa-bullhorn text-red-400"></i> Interphone & Défense Active
+                        </span>
+                        <span id="intercomBadge" class="text-[10px] px-2 py-0.5 rounded font-bold font-mono bg-red-950 text-red-300 border border-red-800">SOMMATION & STROBE</span>
+                    </div>
+                    <div class="text-[11px] text-slate-400 space-y-1">
+                        <div class="flex justify-between">
+                            <span>Session audio :</span>
+                            <span id="intercomSessionState" class="text-slate-400 font-semibold">VEILLE</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Protection stroboscope :</span>
+                            <span class="text-slate-300 font-mono">Max 8s &bull; Cooldown 15s</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>File Sync P2P :</span>
+                            <span id="p2pPendingCount" class="font-mono text-cyan-400 font-bold">0 événements</span>
+                        </div>
+                    </div>
+                    <div class="space-y-1.5">
+                        <div class="flex gap-1.5">
+                            <select id="voiceSommationSelect" class="flex-1 bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1">
+                                <option value="ZONE_SURVEILLEE">Zone surveillée (quitter)</option>
+                                <option value="PRESENCE_DETECTEE">Présence détectée (contacter)</option>
+                                <option value="EVACUATION_SECURITE">Incident sécurité (éloigner)</option>
+                            </select>
+                            <button onclick="triggerVoiceSommation()" class="bg-purple-700 hover:bg-purple-600 text-white font-bold px-2.5 py-1 rounded text-xs transition" title="Diffuser sommation vocale neutre">
+                                <i class="fa-solid fa-volume-high"></i>
+                            </button>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="triggerDefensiveStrobe(5)" class="flex-1 bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold py-1 rounded text-xs transition flex items-center justify-center gap-1">
+                                <i class="fa-solid fa-bolt"></i> Strobe 5s
+                            </button>
+                            <button onclick="openPrivacyModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-3 py-1 rounded text-xs transition" title="Double contrôle Two-Man Rule">
+                                <i class="fa-solid fa-user-lock"></i> Two-Man
+                            </button>
+                        </div>
+                    </div>
+                    <div class="pt-2 border-t border-cardBorder flex items-center justify-between">
+                        <span class="text-[10px] text-slate-500">Conformité RGPD & éthique</span>
+                        <span id="strobeCooldownTimer" class="text-[10px] font-mono text-emerald-400">Prêt</span>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- JUMEAU NUMÉRIQUE 2D (PRO-10) -->
+            <div class="bg-cardBg border border-cardBorder rounded-xl p-4 shadow-sm space-y-3">
+                <div class="flex items-center justify-between border-b border-cardBorder pb-2">
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-draw-polygon text-emerald-400"></i>
+                        <h3 class="text-xs font-bold text-slate-200 uppercase tracking-wide">
+                            Jumeau Numérique 2D & Handover Multi-Caméras
+                        </h3>
+                    </div>
+                    <div class="flex items-center gap-2 text-xs">
+                        <span id="spatialTrackCount" class="text-slate-400 font-mono text-[11px]">0 trajectoires actives</span>
+                        <button onclick="refreshFloorplan()" class="text-cyan-400 hover:underline text-[11px]"><i class="fa-solid fa-rotate mr-1"></i>Actualiser Plan</button>
+                    </div>
+                </div>
+                <!-- Canvas SVG interactif pour le plan -->
+                <div class="relative w-full h-48 bg-slate-950 rounded-lg border border-slate-800 overflow-hidden flex items-center justify-center">
+                    <svg id="floorplanSvg" class="w-full h-full" viewBox="0 0 100 60" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                            <pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse">
+                                <path d="M 10 0 L 0 0 0 10" fill="none" stroke="#1e293b" stroke-width="0.3"/>
+                            </pattern>
+                        </defs>
+                        <rect width="100" height="60" fill="url(#grid)" />
+                        
+                        <polygon points="10,10 40,10 40,50 10,50" fill="rgba(2, 132, 199, 0.15)" stroke="#0284c7" stroke-width="0.5" stroke-dasharray="1,1" />
+                        <text x="12" y="15" fill="#38bdf8" font-size="2.5" font-family="sans-serif">Zone Entrée / Salon</text>
+                        
+                        <polygon points="50,15 85,15 85,45 50,45" fill="rgba(239, 68, 68, 0.15)" stroke="#ef4444" stroke-width="0.5" />
+                        <text x="52" y="20" fill="#f87171" font-size="2.5" font-family="sans-serif">Zone Restreinte Coffre</text>
+                        
+                        <g id="svgCamerasLayer">
+                            <circle cx="10" cy="10" r="1.8" fill="#38bdf8" />
+                            <path d="M 10 10 L 25 3 L 25 17 Z" fill="rgba(56, 189, 248, 0.2)" stroke="#38bdf8" stroke-width="0.2" />
+                            <text x="12" y="8" fill="#cbd5e1" font-size="2">Cam Salon</text>
+                        </g>
+
+                        <g id="svgTracksLayer"></g>
+                    </svg>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. CENTRE DE SURVEILLANCE VIDÉO & TÉLÉMÉTRIE MULTI-SMARTPHONES -->
+        <section class="space-y-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-base font-bold text-slate-200 flex items-center space-x-2">
+                        <i class="fa-solid fa-video text-blue-400"></i>
+                        <span>Surveillance Vidéo & Télémétrie des Nœuds Mobiles</span>
+                    </h2>
+                    <p class="text-xs text-slate-400">Flux MJPEG indépendants et surveillance continue des capteurs physiques</p>
+                </div>
+                <div class="flex space-x-2">
+                    <button onclick="openAddDeviceModal()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1 shadow">
+                        <i class="fa-solid fa-plus"></i>
+                        <span>Ajouter un Smartphone</span>
+                    </button>
+                    <button onclick="addMockPhone()" class="bg-purple-800 hover:bg-purple-700 text-purple-200 px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1 shadow" title="Ajoute le simulateur local (127.0.0.1:8081)">
+                        <i class="fa-solid fa-robot"></i>
+                        <span>Ajouter Simulateur Mock</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Grille dynamique des caméras -->
+            <div id="devicesContainer" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Rempli dynamiquement en JS -->
+            </div>
+        </section>
+
+        <!-- NOUVELLE SECTION : CHRONOLOGIE & STATISTIQUES DES INCIDENTS -->
+        <section class="bg-cardBg border border-cardBorder rounded-xl p-5 shadow-md space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-cardBorder pb-3">
+                <div>
+                    <h2 class="text-base font-bold text-slate-200 flex items-center space-x-2">
+                        <i class="fa-solid fa-chart-line text-cyan-400"></i>
+                        <span>Chronologie & Statistiques Analytiques</span>
+                    </h2>
+                    <p class="text-xs text-slate-400">Activité et répartition des incidents réels et simulés</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <a href="/api/reports/summary/pdf?period=today" target="_blank" class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition flex items-center space-x-1 shadow">
+                        <i class="fa-solid fa-file-pdf"></i>
+                        <span>Rapport Journalier PDF</span>
+                    </a>
+                    <a href="/api/reports/summary/pdf?period=all" target="_blank" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-cardBorder px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center space-x-1">
+                        <i class="fa-solid fa-file-shield text-purple-400"></i>
+                        <span>Rapport Global PDF</span>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Grille des statistiques et graphiques -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- Graphique d'activité journalière -->
+                <div class="md:col-span-2 bg-slate-900/60 p-4 rounded-lg border border-cardBorder space-y-2">
+                    <div class="flex justify-between items-center text-xs">
+                        <span class="font-bold text-slate-300">Activité des 7 derniers jours (Données réelles)</span>
+                        <span class="text-slate-500 text-[10px]">Volume quotidien</span>
+                    </div>
+                    <div id="statsDailyChart" class="flex items-end justify-between gap-2 h-28 pt-4 pb-1 px-2 border-b border-slate-800">
+                        <!-- Généré dynamiquement en JS -->
+                    </div>
+                </div>
+
+                <!-- Répartition par gravité et catégorie -->
+                <div class="bg-slate-900/60 p-4 rounded-lg border border-cardBorder space-y-3">
+                    <span class="font-bold text-slate-300 text-xs block">Répartition par Gravité</span>
+                    <div class="space-y-2.5 text-xs">
+                        <div>
+                            <div class="flex justify-between text-[11px] mb-1">
+                                <span class="text-red-400 font-semibold"><i class="fa-solid fa-circle text-[8px] mr-1"></i> Critique</span>
+                                <span id="statSevCritique" class="font-bold text-slate-200">0</span>
+                            </div>
+                            <div class="w-full bg-slate-800 rounded-full h-1.5"><div id="barSevCritique" class="bg-red-500 h-1.5 rounded-full" style="width: 0%"></div></div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-[11px] mb-1">
+                                <span class="text-amber-400 font-semibold"><i class="fa-solid fa-circle text-[8px] mr-1"></i> Avertissement</span>
+                                <span id="statSevAvert" class="font-bold text-slate-200">0</span>
+                            </div>
+                            <div class="w-full bg-slate-800 rounded-full h-1.5"><div id="barSevAvert" class="bg-amber-400 h-1.5 rounded-full" style="width: 0%"></div></div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-[11px] mb-1">
+                                <span class="text-blue-400 font-semibold"><i class="fa-solid fa-circle text-[8px] mr-1"></i> Info / Système</span>
+                                <span id="statSevInfo" class="font-bold text-slate-200">0</span>
+                            </div>
+                            <div class="w-full bg-slate-800 rounded-full h-1.5"><div id="barSevInfo" class="bg-blue-400 h-1.5 rounded-full" style="width: 0%"></div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. CENTRE DES INCIDENTS ET HISTORIQUE DES PREUVES -->
+        <section class="bg-cardBg border border-cardBorder rounded-xl p-5 shadow-md space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-cardBorder pb-4">
+                <div>
+                    <h2 class="text-base font-bold text-slate-200 flex items-center space-x-2">
+                        <i class="fa-solid fa-clock-rotate-left text-purple-400"></i>
+                        <span>Centre des Incidents & Preuves Enregistrées</span>
+                    </h2>
+                    <p class="text-xs text-slate-400">Journalisation sécurisée, captures photo JPEG et clips vidéo avec pré-roll et post-roll</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <a href="/api/alerts/export/csv" class="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-cardBorder px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center space-x-1">
+                        <i class="fa-solid fa-file-csv text-emerald-400"></i>
+                        <span>Exporter CSV</span>
+                    </a>
+                    <a href="/api/reports/summary/pdf?period=7d" target="_blank" class="bg-slate-800 hover:bg-slate-700 text-purple-300 border border-purple-800/40 px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center space-x-1">
+                        <i class="fa-solid fa-file-pdf"></i>
+                        <span>Rapport 7 Jours (PDF)</span>
+                    </a>
+                    <button onclick="cleanExpiredStorage()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-cardBorder px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center space-x-1" title="Purge les preuves de plus de 7 jours">
+                        <i class="fa-solid fa-broom text-cyan-400"></i>
+                        <span>Purger (> 7j)</span>
+                    </button>
+                    <button onclick="clearAlerts()" class="text-red-400 hover:text-red-300 text-xs px-3 py-1.5 rounded-lg border border-red-900/60 hover:bg-red-950/40 transition flex items-center space-x-1">
+                        <i class="fa-solid fa-trash"></i>
+                        <span>Vider l'historique</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- BARRE DE FILTRES DYNAMIQUES -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-3 bg-slate-900/40 p-3 rounded-lg border border-cardBorder text-xs">
+                <div>
+                    <label class="block text-slate-400 font-semibold mb-1">Filtrer par Smartphone :</label>
+                    <select id="filterDevice" onchange="applyAlertFilters()" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-blue-500">
+                        <option value="">Tous les smartphones</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-slate-400 font-semibold mb-1">Type d'incident :</label>
+                    <select id="filterType" onchange="applyAlertFilters()" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-blue-500">
+                        <option value="">Tous les types</option>
+                        <option value="MOUVEMENT_VIDÉO">Mouvement Vidéo</option>
+                        <option value="ACOUSTIQUE">Acoustique / Bris de verre</option>
+                        <option value="PROXIMITÉ">Proximité</option>
+                        <option value="CHOC_ACCÉLÉROMÈTRE">Choc Accéléromètre</option>
+                        <option value="SIMULATED_EVENT">Simulation</option>
+                        <option value="DEVICE_DISCONNECTED">Déconnexion</option>
+                        <option value="DEVICE_RECONNECTED">Reconnexion</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-slate-400 font-semibold mb-1">Période :</label>
+                    <select id="filterPeriod" onchange="applyAlertFilters()" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-blue-500">
+                        <option value="">Toute la période</option>
+                        <option value="today">Aujourd'hui</option>
+                        <option value="24h">Dernières 24 heures</option>
+                        <option value="7d">7 derniers jours</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-slate-400 font-semibold mb-1">Recherche :</label>
+                    <div class="relative">
+                        <input type="text" id="filterQuery" oninput="applyAlertFilters()" placeholder="Rechercher par texte..." class="w-full bg-slate-800 border border-slate-700 rounded pl-8 pr-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-blue-500">
+                        <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2.5 text-slate-500"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TABLE DES ALERTES -->
+            <div class="overflow-x-auto rounded-lg border border-cardBorder">
+                <table class="w-full text-left text-xs text-slate-300">
+                    <thead class="uppercase bg-slate-800/80 text-slate-400 border-b border-cardBorder">
+                        <tr>
+                            <th class="px-4 py-3">Horodatage</th>
+                            <th class="px-4 py-3">Source & IP</th>
+                            <th class="px-4 py-3">Type & Gravité</th>
+                            <th class="px-4 py-3">Classification</th>
+                            <th class="px-4 py-3">Détails & Mesure</th>
+                            <th class="px-4 py-3 text-center">Capture Photo</th>
+                            <th class="px-4 py-3 text-center">Clip Vidéo</th>
+                            <th class="px-4 py-3 text-center">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="alertsTableBody" class="divide-y divide-cardBorder">
+                        <tr>
+                            <td colspan="8" class="text-center py-8 text-slate-500">Aucun incident enregistré.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- 4. CONFIGURATION DES SEUILS ET PARAMÈTRES DU MOTEUR -->
+        <section class="bg-cardBg border border-cardBorder rounded-xl p-5 shadow-md space-y-4">
+            <h2 class="text-base font-bold text-slate-200 flex items-center space-x-2 border-b border-cardBorder pb-3">
+                <i class="fa-solid fa-sliders text-cyan-400"></i>
+                <span>Configuration des Seuils de Détection & Paramètres</span>
+            </h2>
+            <form id="settingsForm" onsubmit="saveSettings(event)" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <!-- Seuil Proximité -->
+                <div class="bg-slate-900/60 p-3 rounded-lg border border-cardBorder">
+                    <label class="text-xs text-slate-300 font-semibold block mb-1">
+                        <i class="fa-solid fa-hand text-emerald-400 mr-1"></i> Seuil Proximité (cm)
+                    </label>
+                    <input type="number" step="0.5" id="cfg_proximity_threshold" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-xs text-slate-100">
+                    <p class="text-[10px] text-slate-400 mt-1">Alerte si obstacle &le; seuil (défaut : 5 cm)</p>
+                </div>
+
+                <!-- Seuil Acoustique -->
+                <div class="bg-slate-900/60 p-3 rounded-lg border border-cardBorder">
+                    <label class="text-xs text-slate-300 font-semibold block mb-1">
+                        <i class="fa-solid fa-volume-high text-yellow-400 mr-1"></i> Seuil Acoustique (dB relatif)
+                    </label>
+                    <input type="number" step="1.0" id="cfg_sound_threshold" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-xs text-slate-100">
+                    <p class="text-[10px] text-slate-400 mt-1">Valeur indicative à calibrer selon le micro</p>
+                </div>
+
+                <!-- Seuil Accéléromètre -->
+                <div class="bg-slate-900/60 p-3 rounded-lg border border-cardBorder">
+                    <label class="text-xs text-slate-300 font-semibold block mb-1">
+                        <i class="fa-solid fa-mobile-screen text-red-400 mr-1"></i> Seuil Choc / Secousse (m/s²)
+                    </label>
+                    <input type="number" step="0.5" id="cfg_accel_shock_threshold" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-xs text-slate-100">
+                    <p class="text-[10px] text-slate-400 mt-1">Écart à la gravité (9.81 m/s²)</p>
+                </div>
+
+                <!-- Seuil Mouvement Vidéo -->
+                <div class="bg-slate-900/60 p-3 rounded-lg border border-cardBorder">
+                    <label class="text-xs text-slate-300 font-semibold block mb-1">
+                        <i class="fa-solid fa-person-walking text-blue-400 mr-1"></i> Mouvement Vidéo (%)
+                    </label>
+                    <input type="number" step="0.2" id="cfg_motion_area_threshold" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-xs text-slate-100">
+                    <p class="text-[10px] text-slate-400 mt-1">Surface de scène modifiée</p>
+                </div>
+
+                <!-- Cooldown -->
+                <div class="bg-slate-900/60 p-3 rounded-lg border border-cardBorder">
+                    <label class="text-xs text-slate-300 font-semibold block mb-1">
+                        <i class="fa-solid fa-stopwatch text-purple-400 mr-1"></i> Anti-rebond / Cooldown (s)
+                    </label>
+                    <input type="number" step="1.0" id="cfg_cooldown_seconds" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-xs text-slate-100">
+                    <p class="text-[10px] text-slate-400 mt-1">Temporisation anti-mitraillage</p>
+                </div>
+
+                <!-- Checkboxes de contrôle -->
+                <div class="md:col-span-3 flex flex-wrap items-center gap-4 bg-slate-900/40 p-3 rounded-lg border border-cardBorder">
+                    <label class="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
+                        <input type="checkbox" id="cfg_siren_enabled" class="rounded bg-slate-800 border-slate-700 text-blue-600">
+                        <span>Sirène PC activée</span>
+                    </label>
+                    <label class="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
+                        <input type="checkbox" id="cfg_torch_on_alarm" class="rounded bg-slate-800 border-slate-700 text-blue-600">
+                        <span>Allumer la torche sur alerte (selon compatibilité)</span>
+                    </label>
+                    <label class="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
+                        <input type="checkbox" id="cfg_enable_motion" class="rounded bg-slate-800 border-slate-700 text-blue-600">
+                        <span>Détection Mouvement OpenCV</span>
+                    </label>
+                    <div class="ml-auto">
+                        <button type="submit" class="bg-cyan-600 hover:bg-cyan-500 text-white font-bold px-4 py-2 rounded-lg text-xs shadow transition">
+                            <i class="fa-solid fa-floppy-disk mr-1"></i> Enregistrer les paramètres
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </section>
+
+    </main>
+
+    <!-- PIED DE PAGE -->
+    <footer class="bg-cardBg border-t border-cardBorder py-3 px-6 text-center text-xs text-slate-400 flex flex-wrap justify-between items-center">
+        <span>SMART SECURITY MONITOR // TP4 UNIVERSITAIRE</span>
+        <span>Monitoring Host Flask • OpenCV 4.10 • IP Webcam Android</span>
+    </footer>
+
+    <!-- MODAL : AJOUT SMARTPHONE -->
+    <div id="addDeviceModal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="bg-cardBg border border-cardBorder rounded-xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-cardBorder pb-3">
+                <h3 class="font-bold text-slate-100 text-sm flex items-center space-x-2">
+                    <i class="fa-solid fa-mobile-screen-button text-blue-400"></i>
+                    <span>Ajouter un Smartphone Android</span>
+                </h3>
+                <button onclick="closeAddDeviceModal()" class="text-slate-400 hover:text-slate-200">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <form id="addDeviceForm" onsubmit="submitAddDevice(event)" class="space-y-3">
+                <div>
+                    <label class="text-xs text-slate-400 font-semibold block mb-1">Nom du Téléphone</label>
+                    <input type="text" id="dev_name" required placeholder="ex: Smartphone Salon" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-xs text-slate-100">
+                </div>
+                <div>
+                    <label class="text-xs text-slate-400 font-semibold block mb-1">Adresse IP Locale du Smartphone</label>
+                    <input type="text" id="dev_ip" required placeholder="ex: 192.168.1.42 ou 127.0.0.1" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-xs text-slate-100">
+                    <p class="text-[10px] text-slate-400 mt-1">Affichée en bas de l'écran dans IP Webcam</p>
+                </div>
+                <div>
+                    <label class="text-xs text-slate-400 font-semibold block mb-1">Port HTTP</label>
+                    <input type="number" id="dev_port" required value="8080" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-xs text-slate-100">
+                </div>
+                <div class="pt-1">
+                    <label class="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
+                        <input type="checkbox" id="dev_enable_torch" class="rounded bg-slate-800 border-slate-700 text-blue-600">
+                        <span>Allumage automatique de la torche sur intrusion</span>
+                    </label>
+                </div>
+                <div id="addDeviceError" class="text-red-400 text-xs hidden"></div>
+                <div class="flex justify-end space-x-2 pt-3 border-t border-cardBorder">
+                    <button type="button" onclick="closeAddDeviceModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs font-semibold">Annuler</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-bold shadow">Ajouter l'appareil</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL : VISUALISEUR DE CAPTURE PHOTO -->
+    <div id="imageModal" class="hidden fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-50 p-4" onclick="closeImageModal()">
+        <div class="relative max-w-4xl w-full bg-cardBg border border-cardBorder rounded-xl overflow-hidden shadow-2xl" onclick="event.stopPropagation()">
+            <div class="p-3 bg-slate-900 flex justify-between items-center border-b border-cardBorder">
+                <span id="imageModalTitle" class="text-xs font-bold text-slate-200">Preuve Photo de l'Incident</span>
+                <button onclick="closeImageModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div class="p-2 bg-black flex justify-center items-center">
+                <img id="imageModalSrc" src="" alt="Capture d'alerte" class="max-h-[75vh] object-contain rounded">
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL : LECTEUR VIDÉO HTML5 D'INCIDENT -->
+    <div id="videoModal" class="hidden fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-50 p-4" onclick="closeVideoModal()">
+        <div class="relative max-w-4xl w-full bg-cardBg border border-cardBorder rounded-xl overflow-hidden shadow-2xl" onclick="event.stopPropagation()">
+            <div class="p-3 bg-slate-900 flex justify-between items-center border-b border-cardBorder">
+                <span id="videoModalTitle" class="text-xs font-bold text-slate-200">Clip Vidéo de l'Incident</span>
+                <button onclick="closeVideoModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div class="p-2 bg-black flex justify-center items-center">
+                <video id="videoModalSrc" controls class="max-h-[70vh] w-full rounded"></video>
+            </div>
+            <div class="p-3 bg-slate-900 text-xs text-slate-400 flex justify-between items-center">
+                <span>Tampon circulaire : 3 secondes avant et 5 secondes après l'événement.</span>
+                <a id="videoDownloadLink" href="#" download class="text-cyan-400 hover:underline flex items-center gap-1 font-semibold">
+                    <i class="fa-solid fa-download"></i> Télécharger la preuve
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL : SCÉNARIO DE DÉMONSTRATION INTERACTIF -->
+    <div id="demoModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="bg-cardBg border border-cardBorder rounded-xl max-w-3xl w-full max-h-[85vh] overflow-y-auto p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-cardBorder pb-3">
+                <h3 class="font-bold text-amber-300 text-sm flex items-center space-x-2">
+                    <i class="fa-solid fa-graduation-cap text-amber-400"></i>
+                    <span>Scénario de Démonstration en Classe (5 à 7 minutes)</span>
+                </h3>
+                <button onclick="closeDemoModal()" class="text-slate-400 hover:text-slate-200">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <div class="space-y-3 text-xs text-slate-300">
+                <p class="text-slate-400">Ce déroulé pas-à-pas vous guide lors de la soutenance devant l'enseignant :</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div class="bg-slate-900/60 p-3 rounded-lg border border-cardBorder space-y-1">
+                        <span class="font-bold text-blue-400">1. Présentation de l'Architecture</span>
+                        <p class="text-slate-400">Expliquez le rôle du PC comme Monitoring Host central et des smartphones comme capteurs IP distribués.</p>
+                    </div>
+                    <div class="bg-slate-900/60 p-3 rounded-lg border border-cardBorder space-y-1">
+                        <span class="font-bold text-cyan-400">2. Surveillance en Direct</span>
+                        <p class="text-slate-400">Montrez les flux vidéo MJPEG actifs et les jauges télémétriques (proximité, niveau sonore, accéléromètre).</p>
+                    </div>
+                    <div class="bg-slate-900/60 p-3 rounded-lg border border-cardBorder space-y-1">
+                        <span class="font-bold text-emerald-400">3. Simulation d'Intrusion</span>
+                        <p class="text-slate-400">Vérifiez l'état ARMÉ. Passez la main devant la caméra ou tapez dans vos mains. La sirène PC retentit.</p>
+                    </div>
+                    <div class="bg-slate-900/60 p-3 rounded-lg border border-cardBorder space-y-1">
+                        <span class="font-bold text-yellow-400">4. Arrêt de la Sirène</span>
+                        <p class="text-slate-400">Cliquez sur « ARRÊTER LA SIRÈNE » : la sirène se coupe instantanément sans couper la vidéo.</p>
+                    </div>
+                    <div class="bg-slate-900/60 p-3 rounded-lg border border-cardBorder space-y-1">
+                        <span class="font-bold text-purple-400">5. Consultation des Preuves</span>
+                        <p class="text-slate-400">Ouvrez l'instantané photo JPEG et lancez le clip vidéo (montrant les 3s avant et 5s après l'incident).</p>
+                    </div>
+                    <div class="bg-slate-900/60 p-3 rounded-lg border border-cardBorder space-y-1">
+                        <span class="font-bold text-red-400">6. Déconnexion & Résilience</span>
+                        <p class="text-slate-400">Montrez que la coupure d'un appareil passe en statut DÉGRADÉ sans crasher le serveur.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="text-right pt-2 border-t border-cardBorder">
+                <button onclick="closeDemoModal()" class="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold rounded text-xs">Fermer le guide</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL : GUIDE TP ARCHITECTURE -->
+    <div id="guideModal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="bg-cardBg border border-cardBorder rounded-xl max-w-2xl w-full max-h-[85vh] overflow-y-auto p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-cardBorder pb-3">
+                <h3 class="font-bold text-slate-100 text-sm flex items-center space-x-2">
+                    <i class="fa-solid fa-book-bookmark text-blue-400"></i>
+                    <span>Guide de Manipulation & Architecture Système</span>
+                </h3>
+                <button onclick="closeGuideModal()" class="text-slate-400 hover:text-slate-200">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <div class="space-y-3 text-xs text-slate-300">
+                <div class="bg-blue-950/40 border border-blue-800/50 p-3 rounded-lg">
+                    <h4 class="font-bold text-blue-300 mb-1">1. Réseau Local</h4>
+                    <p class="text-slate-400">PC et smartphones doivent être sur le même Wi-Fi ou partage de connexion 4G. Si le Wi-Fi universitaire bloque le trafic inter-clients (AP Isolation), utilisez le point d'accès mobile 4G ou le simulateur mock.</p>
+                </div>
+                <div class="bg-slate-900/60 border border-cardBorder p-3 rounded-lg">
+                    <h4 class="font-bold text-slate-200 mb-1">2. Démarrage IP Webcam</h4>
+                    <p class="text-slate-400">Réglez la vidéo à 640x480, cochez l'enregistrement des capteurs, puis touchez « Démarrer le serveur » tout en bas. Notez l'adresse IP (ex: <code>http://192.168.1.42:8080</code>).</p>
+                </div>
+                <div class="bg-emerald-950/40 border border-emerald-800/50 p-3 rounded-lg">
+                    <h4 class="font-bold text-emerald-300 mb-1">3. Détections Supportées</h4>
+                    <ul class="list-disc list-inside space-y-1 text-slate-400">
+                        <li><strong>Proximité :</strong> obstacle à moins de 5 cm.</li>
+                        <li><strong>Acoustique :</strong> bruit supérieur au seuil relatif de 75 dB.</li>
+                        <li><strong>Accéléromètre :</strong> déviation de l'accélération supérieure à 4.5 m/s².</li>
+                        <li><strong>Mouvement vidéo :</strong> calcul de surface différentielle OpenCV.</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="text-right pt-2 border-t border-cardBorder">
+                <button onclick="closeGuideModal()" class="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-bold">Compris</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL : ZONES DE SURVEILLANCE (ROI) -->
+    <div id="zonesModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="bg-cardBg border border-cardBorder rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-cardBorder pb-3">
+                <h3 class="font-bold text-slate-100 text-sm flex items-center space-x-2">
+                    <i class="fa-solid fa-draw-polygon text-emerald-400"></i>
+                    <span>Zones de Surveillance (ROI) — <span id="zonesModalDeviceName" class="text-cyan-400">Appareil</span></span>
+                </h3>
+                <button onclick="closeZonesModal()" class="text-slate-400 hover:text-slate-200">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            
+            <p class="text-xs text-slate-400">
+                Définissez des rectangles de détection sur l'image. Si des zones sont actives, le mouvement ne déclenchera d'alerte que lorsqu'il survient à l'intérieur de celles-ci.
+            </p>
+
+            <!-- Liste des zones configurées -->
+            <div class="space-y-2">
+                <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wide">Zones Actuelles</h4>
+                <div id="zonesListContainer" class="space-y-1.5 max-h-48 overflow-y-auto">
+                    <div class="text-slate-500 text-xs py-2 text-center">Aucune zone configurée.</div>
+                </div>
+            </div>
+
+            <!-- Formulaire d'ajout de zone -->
+            <form id="addZoneForm" onsubmit="submitAddZone(event)" class="bg-slate-900/60 p-4 rounded-lg border border-cardBorder space-y-3">
+                <h4 class="text-xs font-bold text-slate-200 flex items-center space-x-1">
+                    <i class="fa-solid fa-plus text-emerald-400"></i>
+                    <span>Ajouter une Nouvelle Zone</span>
+                </h4>
+                <div>
+                    <label class="text-[11px] text-slate-400 font-semibold block mb-1">Nom de la Zone</label>
+                    <input type="text" id="zone_name" required placeholder="ex: Porte d'entrée" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-100">
+                </div>
+                <div class="grid grid-cols-4 gap-2">
+                    <div>
+                        <label class="text-[10px] text-slate-400 block mb-0.5">X (%)</label>
+                        <input type="number" id="zone_x" min="0" max="95" value="10" required class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-100">
+                    </div>
+                    <div>
+                        <label class="text-[10px] text-slate-400 block mb-0.5">Y (%)</label>
+                        <input type="number" id="zone_y" min="0" max="95" value="10" required class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-100">
+                    </div>
+                    <div>
+                        <label class="text-[10px] text-slate-400 block mb-0.5">Largeur (%)</label>
+                        <input type="number" id="zone_w" min="5" max="100" value="40" required class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-100">
+                    </div>
+                    <div>
+                        <label class="text-[10px] text-slate-400 block mb-0.5">Hauteur (%)</label>
+                        <input type="number" id="zone_h" min="5" max="100" value="40" required class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-100">
+                    </div>
+                </div>
+                <div class="flex items-center justify-between pt-2">
+                    <label class="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
+                        <input type="checkbox" id="zone_enabled" checked class="rounded bg-slate-800 border-slate-700 text-emerald-500">
+                        <span>Zone active immédiatement</span>
+                    </label>
+                    <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-1.5 rounded text-xs transition">
+                        Enregistrer la Zone
+                    </button>
+                </div>
+            </form>
+
+            <div class="text-right pt-2 border-t border-cardBorder">
+                <button onclick="closeZonesModal()" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs font-semibold">Fermer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL : DIAGNOSTIC APPROFONDI DE L'APPAREIL -->
+    <div id="diagnosticModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="bg-cardBg border border-cardBorder rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-cardBorder pb-3">
+                <h3 class="font-bold text-slate-100 text-sm flex items-center space-x-2">
+                    <i class="fa-solid fa-stethoscope text-cyan-400"></i>
+                    <span>Diagnostic Technique — <span id="diagModalDeviceName" class="text-cyan-300">Appareil</span></span>
+                </h3>
+                <button onclick="closeDiagnosticModal()" class="text-slate-400 hover:text-slate-200">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Contenu du Diagnostic -->
+            <div id="diagContent" class="space-y-3 text-xs">
+                <div class="text-center py-8 text-slate-500">Chargement des métriques techniques...</div>
+            </div>
+
+            <div class="text-right pt-2 border-t border-cardBorder">
+                <button onclick="closeDiagnosticModal()" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs font-semibold">Fermer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL : VÉRIFICATION D'INTÉGRITÉ CRYPTOGRAPHIQUE -->
+    <div id="integrityModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="bg-cardBg border border-cardBorder rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-cardBorder pb-3">
+                <h3 class="font-bold text-slate-100 text-sm flex items-center space-x-2">
+                    <i class="fa-solid fa-fingerprint text-emerald-400"></i>
+                    <span>Certification d'Intégrité Cryptographique — <span id="integrityModalAlertId" class="text-cyan-300 font-mono">Alerte</span></span>
+                </h3>
+                <button onclick="closeIntegrityModal()" class="text-slate-400 hover:text-slate-200">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Contenu d'intégrité -->
+            <div id="integrityContent" class="space-y-3 text-xs">
+                <div class="text-center py-6 text-slate-500">Vérification de l'intégrité des fichiers et de la chaîne de blocs...</div>
+            </div>
+
+            <div class="text-right pt-2 border-t border-cardBorder">
+                <button onclick="closeIntegrityModal()" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs font-semibold">Fermer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL : SÉCURITÉ AUTHENTIFICATION 2FA / TOTP (RFC 6238) -->
+    <div id="twoFactorModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="bg-cardBg border border-cardBorder rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-cardBorder pb-3">
+                <h3 class="font-bold text-slate-100 text-sm flex items-center space-x-2">
+                    <i class="fa-solid fa-key text-purple-400"></i>
+                    <span>Authentification à Deux Facteurs (2FA TOTP)</span>
+                </h3>
+                <button onclick="close2FAModal()" class="text-slate-400 hover:text-slate-200">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <div id="twoFactorLoading" class="text-center py-6 text-slate-400 text-xs">
+                <i class="fa-solid fa-spinner fa-spin mr-2"></i> Chargement de la configuration 2FA...
+            </div>
+
+            <!-- Étape 1 : Si 2FA Inactif -> Enrôlement -->
+            <div id="twoFactorSetupContainer" class="hidden space-y-4 text-xs text-slate-300">
+                <p class="text-slate-400">
+                    Scannez le code QR avec votre application d'authentification (Google Authenticator, Microsoft Authenticator, FreeOTP ou 1Password) :
+                </p>
+                <div class="flex justify-center p-3 bg-white rounded-xl w-48 h-48 mx-auto shadow-inner">
+                    <img id="twoFactorQrImg" src="" alt="QR Code 2FA" class="w-full h-full object-contain">
+                </div>
+                <div class="bg-slate-900/70 p-2.5 rounded-lg border border-cardBorder">
+                    <span class="text-[10px] uppercase font-bold text-slate-500 block">Clé secrète manuelle :</span>
+                    <span id="twoFactorSecretText" class="font-mono text-cyan-300 text-xs tracking-wider select-all"></span>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Code de confirmation (6 chiffres) :</label>
+                    <input type="text" id="twoFactorVerifyCode" maxlength="6" placeholder="000000" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-center font-mono text-lg tracking-widest text-white focus:outline-none focus:border-purple-500">
+                </div>
+                <button onclick="submitEnable2FA()" id="btnSubmitEnable2FA" class="w-full py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-lg text-xs transition shadow flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-check"></i> Activer la protection 2FA
+                </button>
+            </div>
+
+            <!-- Étape 2 : Affichage des codes de secours (après activation) -->
+            <div id="twoFactorRecoveryContainer" class="hidden space-y-3 text-xs">
+                <div class="p-3 bg-emerald-950/40 border border-emerald-800 rounded-lg text-emerald-200">
+                    <p class="font-bold flex items-center gap-1.5"><i class="fa-solid fa-circle-check"></i> 2FA activée avec succès !</p>
+                    <p class="text-[11px] mt-1 text-emerald-300">Conservez ces codes de secours en lieu sûr. Chaque code est utilisable une seule fois.</p>
+                </div>
+                <div id="twoFactorRecoveryList" class="bg-slate-950 p-3 rounded-lg border border-cardBorder font-mono text-cyan-300 text-xs grid grid-cols-2 gap-2 text-center">
+                    <!-- Codes injectés dynamiquement -->
+                </div>
+                <button onclick="close2FAModal()" class="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-lg text-xs">
+                    J'ai enregistré mes codes de secours
+                </button>
+            </div>
+
+            <!-- Étape 3 : Si 2FA déjà Actif -> Statut et Désactivation -->
+            <div id="twoFactorActiveContainer" class="hidden space-y-4 text-xs">
+                <div class="p-4 bg-purple-950/40 border border-purple-800 rounded-xl text-center space-y-2">
+                    <i class="fa-solid fa-shield-check text-3xl text-purple-400"></i>
+                    <h4 class="font-bold text-slate-100 text-sm">Protection 2FA Active</h4>
+                    <p class="text-slate-400 text-[11px]">Votre compte administrateur est protégé par authentification forte RFC 6238.</p>
+                </div>
+                <div class="border-t border-cardBorder pt-3 space-y-2">
+                    <label class="block text-xs font-semibold text-slate-400">Pour désactiver la 2FA, confirmez votre mot de passe :</label>
+                    <input type="password" id="twoFactorDisablePassword" placeholder="Mot de passe actuel" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white">
+                    <button onclick="submitDisable2FA()" class="w-full py-2 bg-red-900/60 hover:bg-red-800 text-red-200 font-bold rounded-lg text-xs transition border border-red-700">
+                        Désactiver la protection 2FA
+                    </button>
+                </div>
+            </div>
+
+            <div class="text-right pt-2 border-t border-cardBorder">
+                <button onclick="close2FAModal()" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs font-semibold">Fermer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL : JOURNAL D'AUDIT SIEM (SYSLOG RFC 5424 / CEF) -->
+    <div id="siemModal" class="hidden fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="bg-cardBg border border-cardBorder rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-cardBorder pb-3">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-shield-virus text-purple-400 text-lg"></i>
+                    <div>
+                        <h3 class="font-bold text-slate-100 text-sm">Journal de Sécurité SIEM</h3>
+                        <p class="text-[11px] text-slate-400">Format RFC 5424 / ArcSight CEF &bull; Masquage strict des données sensibles</p>
+                    </div>
+                </div>
+                <button onclick="closeSiemModal()" class="text-slate-400 hover:text-slate-200">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-between gap-2 bg-slate-900/60 p-2.5 rounded-lg border border-cardBorder text-xs">
+                <div class="flex items-center gap-3">
+                    <span class="text-slate-400">Format : <strong id="siemFormatBadge" class="text-purple-300 font-mono">CEF</strong></span>
+                    <span class="text-slate-400">Export Réseau : <strong id="siemExportBadge" class="text-slate-300 font-mono">Désactivé (Fichier local)</strong></span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="text" id="siemSearchFilter" oninput="filterSiemLogs()" placeholder="Filtrer les événements..." class="bg-slate-950 border border-slate-700 rounded px-2.5 py-1 text-xs text-white placeholder-slate-500">
+                    <button onclick="loadSiemLogs()" class="bg-purple-800 hover:bg-purple-700 text-purple-100 px-2.5 py-1 rounded text-xs transition flex items-center gap-1 font-semibold">
+                        <i class="fa-solid fa-rotate"></i> Actualiser
+                    </button>
+                </div>
+            </div>
+
+            <!-- Liste des logs SIEM -->
+            <div id="siemLogsContainer" class="bg-slate-950 p-3 rounded-lg border border-cardBorder max-h-96 overflow-y-auto font-mono text-[11px] space-y-1 divide-y divide-slate-800">
+                <div class="text-center py-6 text-slate-500 font-sans">Chargement des événements de sécurité...</div>
+            </div>
+
+            <div class="text-right pt-2 border-t border-cardBorder">
+                <button onclick="closeSiemModal()" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs font-semibold">Fermer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL : GEOFENCING & GESTION DES APPAREILS DE CONFIANCE -->
+    <div id="presenceModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="bg-cardBg border border-cardBorder rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-cardBorder pb-3">
+                <h3 class="font-bold text-slate-100 text-sm flex items-center space-x-2">
+                    <i class="fa-solid fa-network-wired text-emerald-400"></i>
+                    <span>Géofencing — Appareils de Confiance & Dérogation</span>
+                </h3>
+                <button onclick="closePresenceModal()" class="text-slate-400 hover:text-slate-200">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Dérogation Manuelle -->
+            <div class="bg-slate-900/60 p-3.5 rounded-lg border border-cardBorder space-y-2">
+                <span class="text-xs font-bold text-slate-200 block">Dérogation Manuelle d'État</span>
+                <p class="text-[11px] text-slate-400">Permet à un opérateur d'imposer un état de présence prioritaire en cas d'oubli de smartphone :</p>
+                <div class="flex flex-wrap gap-2 pt-1">
+                    <button onclick="overridePresence('HOME')" class="px-3 py-1 bg-emerald-800 hover:bg-emerald-700 text-emerald-100 rounded text-xs font-semibold transition">
+                        Forcer Présence (HOME)
+                    </button>
+                    <button onclick="overridePresence('ARMED_AWAY')" class="px-3 py-1 bg-red-800 hover:bg-red-700 text-red-100 rounded text-xs font-semibold transition">
+                        Forcer Absence (ARMED_AWAY)
+                    </button>
+                    <button onclick="overridePresence('MANUAL')" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs font-semibold transition">
+                        Mode Manuel
+                    </button>
+                </div>
+            </div>
+
+            <!-- Liste des appareils de confiance -->
+            <div class="space-y-2">
+                <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wide">Appareils Réseau Surveillés</h4>
+                <div id="presenceDevicesList" class="space-y-1.5 max-h-48 overflow-y-auto">
+                    <div class="text-slate-500 text-xs py-2 text-center">Aucun appareil de confiance enregistré.</div>
+                </div>
+            </div>
+
+            <!-- Formulaire d'ajout d'appareil de confiance -->
+            <form id="addPresenceDeviceForm" onsubmit="submitAddPresenceDevice(event)" class="bg-slate-900/60 p-4 rounded-lg border border-cardBorder space-y-3">
+                <h4 class="text-xs font-bold text-slate-200 flex items-center space-x-1">
+                    <i class="fa-solid fa-plus text-emerald-400"></i>
+                    <span>Ajouter un Appareil de Confiance (LAN)</span>
+                </h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                    <div>
+                        <label class="text-[11px] text-slate-400 block mb-1">Nom du propriétaire / appareil</label>
+                        <input type="text" id="pres_dev_name" required placeholder="ex: iPhone Alice" class="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white">
+                    </div>
+                    <div>
+                        <label class="text-[11px] text-slate-400 block mb-1">Adresse IP locale</label>
+                        <input type="text" id="pres_dev_ip" required placeholder="ex: 192.168.1.50" class="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white font-mono">
+                    </div>
+                    <div>
+                        <label class="text-[11px] text-slate-400 block mb-1">Adresse MAC (optionnelle)</label>
+                        <input type="text" id="pres_dev_mac" placeholder="ex: AA:BB:CC:DD:EE:FF" class="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white font-mono">
+                    </div>
+                    <div>
+                        <label class="text-[11px] text-slate-400 block mb-1">Type</label>
+                        <select id="pres_dev_type" class="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white">
+                            <option value="smartphone">Smartphone</option>
+                            <option value="laptop">Ordinateur portable</option>
+                            <option value="badge">Badge Wi-Fi / Tag</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="text-right pt-2">
+                    <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-1.5 rounded text-xs transition">
+                        Enregistrer l'Appareil
+                    </button>
+                </div>
+            </form>
+
+            <div class="text-right pt-2 border-t border-cardBorder">
+                <button onclick="closePresenceModal()" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs font-semibold">Fermer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL : PRIVACY SHIELD & TWO-MAN RULE DECRYPTION (PRO-09) -->
+    <div id="privacyModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="bg-cardBg border border-cardBorder rounded-xl max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-cardBorder pb-3">
+                <h3 class="font-bold text-slate-100 text-sm flex items-center space-x-2">
+                    <i class="fa-solid fa-user-lock text-purple-400"></i>
+                    <span>Privacy Shield — Double Contrôle (Two-Man Rule)</span>
+                </h3>
+                <button onclick="closePrivacyModal()" class="text-slate-400 hover:text-slate-200">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <p class="text-xs text-slate-400">
+                Conformément au RGPD et au principe de minimisation, les flux originaux haute résolution sont chiffrés en AES-256-GCM.
+                Le déchiffrement nécessite deux approbations distinctes enregistrées dans le journal d'audit immuable.
+            </p>
+
+            <!-- Formulaire de demande -->
+            <form onsubmit="submitDecryptionRequest(event)" class="bg-slate-900/60 p-4 rounded-lg border border-cardBorder space-y-3 text-xs">
+                <h4 class="font-bold text-slate-200">Initier une Demande d'Accès</h4>
+                <div>
+                    <label class="text-[11px] text-slate-400 block mb-1">Identifiant de la Preuve / Fichier Vidéo</label>
+                    <input type="text" id="priv_resource_id" required placeholder="ex: incident_alert_123.mp4" class="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white font-mono">
+                </div>
+                <div>
+                    <label class="text-[11px] text-slate-400 block mb-1">Motif Légal / Réquisition Judiciaire</label>
+                    <textarea id="priv_reason" required rows="2" placeholder="Motif officiel de la demande de déchiffrement..." class="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white"></textarea>
+                </div>
+                <button type="submit" class="bg-purple-700 hover:bg-purple-600 text-white font-bold px-3 py-1.5 rounded text-xs transition">
+                    Créer la Demande (1/2)
+                </button>
+            </form>
+
+            <!-- Demandes Actives -->
+            <div class="space-y-2 text-xs">
+                <h4 class="font-bold text-slate-300 uppercase tracking-wide">Demandes en Attente d'Approbation</h4>
+                <div id="privacyRequestsList" class="space-y-1.5 max-h-40 overflow-y-auto">
+                    <div class="text-slate-500 text-center py-2">Aucune demande en attente.</div>
+                </div>
+            </div>
+
+            <div class="text-right pt-2 border-t border-cardBorder">
+                <button onclick="closePrivacyModal()" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs font-semibold">Fermer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCRIPT DU TABLEAU DE BORD -->
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html>

@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connexion — Smart Security Monitor</title>
+    <!-- PWA & Mobile Web App Meta -->
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#0b0f19">
+    <link rel="icon" type="image/svg+xml" href="/static/icons/icon.svg">
+    <link rel="apple-touch-icon" href="/static/icons/icon.svg">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex items-center justify-center p-4">
+    <div class="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-8">
+        <div class="text-center mb-8">
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-600/20 border border-blue-500/30 text-blue-400 mb-4">
+                <i class="fa-solid fa-shield-halved text-3xl"></i>
+            </div>
+            <h1 class="text-2xl font-bold tracking-tight text-white">SMART SECURITY MONITOR</h1>
+            <p id="subTitle" class="text-sm text-slate-400 mt-1">Console de Supervision & Vidéosurveillance</p>
+        </div>
+
+        <div id="errorBox" class="hidden mb-6 p-4 rounded-xl bg-red-950/50 border border-red-800 text-red-200 text-sm flex items-start gap-3">
+            <i class="fa-solid fa-circle-exclamation text-red-400 mt-0.5"></i>
+            <span id="errorMessage">Erreur d'authentification</span>
+        </div>
+
+        <div id="infoBox" class="hidden mb-6 p-4 rounded-xl bg-blue-950/50 border border-blue-800 text-blue-200 text-sm flex items-start gap-3">
+            <i class="fa-solid fa-circle-info text-blue-400 mt-0.5"></i>
+            <span id="infoMessage">Information</span>
+        </div>
+
+        <!-- FORMULAIRE DE CONNEXION STANDARD -->
+        <form id="loginForm" class="space-y-5">
+            <div>
+                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Identifiant</label>
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-500">
+                        <i class="fa-solid fa-user"></i>
+                    </span>
+                    <input type="text" id="username" required autofocus placeholder="Identifiant"
+                           class="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Mot de passe</label>
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-500">
+                        <i class="fa-solid fa-lock"></i>
+                    </span>
+                    <input type="password" id="password" required placeholder="••••••••"
+                           class="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm">
+                </div>
+            </div>
+
+            <!-- CHAMP TOTP 2FA (affiché lors du challenge 2FA) -->
+            <div id="totpGroup" class="hidden space-y-2">
+                <div class="flex items-center justify-between">
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-cyan-400">Code 2FA (TOTP / Secours)</label>
+                    <span class="text-[10px] text-slate-400">RFC 6238</span>
+                </div>
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-cyan-400">
+                        <i class="fa-solid fa-shield-halved"></i>
+                    </span>
+                    <input type="text" id="totpToken" placeholder="Ex: 123456" autocomplete="one-time-code" maxlength="16"
+                           class="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-cyan-600/70 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 text-sm font-mono tracking-widest text-center">
+                </div>
+                <p class="text-[11px] text-slate-400">Code à 6 chiffres de votre application ou code de secours à 8 caractères.</p>
+            </div>
+
+            <button type="submit" id="submitBtn"
+                    class="w-full py-3 px-4 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-medium rounded-xl text-sm transition-colors shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2">
+                <span>Se connecter</span>
+                <i class="fa-solid fa-arrow-right"></i>
+            </button>
+        </form>
+
+        <!-- FORMULAIRE DE BOOTSTRAP INITIAL (Masqué par défaut) -->
+        <form id="bootstrapForm" class="space-y-5 hidden">
+            <div>
+                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Identifiant Administrateur</label>
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-500">
+                        <i class="fa-solid fa-user-shield"></i>
+                    </span>
+                    <input type="text" id="bootUsername" required value="admin"
+                           class="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-sm">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Mot de passe initial (Min. 8 car., lettre + chiffre)</label>
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-500">
+                        <i class="fa-solid fa-key"></i>
+                    </span>
+                    <input type="password" id="bootPassword" required placeholder="Mot de passe fort"
+                           class="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-sm">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Confirmer le mot de passe</label>
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-500">
+                        <i class="fa-solid fa-lock"></i>
+                    </span>
+                    <input type="password" id="bootConfirm" required placeholder="Confirmation"
+                           class="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-sm">
+                </div>
+            </div>
+
+            <button type="submit" id="bootSubmitBtn"
+                    class="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-medium rounded-xl text-sm transition-colors shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2">
+                <span>Initialiser le système</span>
+                <i class="fa-solid fa-check"></i>
+            </button>
+        </form>
+
+        <div class="mt-8 pt-6 border-t border-slate-800/80 text-center">
+            <p id="footerHint" class="text-xs text-slate-500">
+                Accès restreint aux opérateurs habilités (ADMIN, OPERATOR, AUDITOR).
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // Détecter si le système nécessite une initialisation
+        async function checkBootstrap() {
+            try {
+                const res = await fetch('/api/auth/bootstrap/status');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.bootstrap_required) {
+                        document.getElementById('loginForm').classList.add('hidden');
+                        document.getElementById('bootstrapForm').classList.remove('hidden');
+                        document.getElementById('subTitle').textContent = "Configuration Initiale du Compte Administrateur";
+                        const infoBox = document.getElementById('infoBox');
+                        const infoMsg = document.getElementById('infoMessage');
+                        infoMsg.textContent = "Premier démarrage : définissez votre compte administrateur sécurisé.";
+                        infoBox.classList.remove('hidden');
+                        document.getElementById('footerHint').textContent = "Ce compte disposera de l'ensemble des privilèges de gestion.";
+                    }
+                }
+            } catch (e) {
+                console.warn("Vérification bootstrap :", e);
+            }
+        }
+        checkBootstrap();
+
+        // Gestion de la connexion avec support 2FA TOTP
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const errBox = document.getElementById('errorBox');
+            const errMsg = document.getElementById('errorMessage');
+            const infoBox = document.getElementById('infoBox');
+            const infoMsg = document.getElementById('infoMessage');
+            const btn = document.getElementById('submitBtn');
+            const totpGroup = document.getElementById('totpGroup');
+            const totpInput = document.getElementById('totpToken');
+            
+            errBox.classList.add('hidden');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Validation...';
+
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            const totpToken = totpInput.value.trim();
+
+            const payload = { username, password };
+            if (totpToken) {
+                payload.totp_token = totpToken;
+            }
+
+            try {
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                
+                if (res.ok && data.status === 'ok') {
+                    window.location.href = '/';
+                } else if (data.status === '2fa_required') {
+                    // Challenge 2FA actif
+                    totpGroup.classList.remove('hidden');
+                    totpInput.focus();
+                    infoMsg.textContent = "Authentification à deux facteurs active : saisissez le code TOTP ou un code de secours.";
+                    infoBox.classList.remove('hidden');
+                    btn.innerHTML = '<span>Valider le code 2FA</span> <i class="fa-solid fa-check"></i>';
+                } else {
+                    errMsg.textContent = data.message || 'Identifiants invalides.';
+                    errBox.classList.remove('hidden');
+                    if (totpGroup.classList.contains('hidden')) {
+                        btn.innerHTML = '<span>Se connecter</span> <i class="fa-solid fa-arrow-right"></i>';
+                    } else {
+                        btn.innerHTML = '<span>Valider le code 2FA</span> <i class="fa-solid fa-check"></i>';
+                    }
+                }
+            } catch (err) {
+                errMsg.textContent = 'Erreur réseau ou serveur inaccessible.';
+                errBox.classList.remove('hidden');
+                btn.innerHTML = '<span>Se connecter</span> <i class="fa-solid fa-arrow-right"></i>';
+            } finally {
+                btn.disabled = false;
+            }
+        });
+
+        // Gestion du bootstrap
+        document.getElementById('bootstrapForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const errBox = document.getElementById('errorBox');
+            const errMsg = document.getElementById('errorMessage');
+            const btn = document.getElementById('bootSubmitBtn');
+
+            errBox.classList.add('hidden');
+            const username = document.getElementById('bootUsername').value.trim();
+            const password = document.getElementById('bootPassword').value;
+            const confirm = document.getElementById('bootConfirm').value;
+
+            if (password !== confirm) {
+                errMsg.textContent = 'Les deux mots de passe ne correspondent pas.';
+                errBox.classList.remove('hidden');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Initialisation...';
+
+            try {
+                const res = await fetch('/api/auth/bootstrap', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password, confirm_password: confirm })
+                });
+                const data = await res.json();
+                if (res.ok && data.status === 'ok') {
+                    window.location.href = '/';
+                } else {
+                    errMsg.textContent = data.message || 'Échec de l\'initialisation.';
+                    errBox.classList.remove('hidden');
+                }
+            } catch (err) {
+                errMsg.textContent = 'Erreur réseau lors de l\'initialisation.';
+                errBox.classList.remove('hidden');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>Initialiser le système</span> <i class="fa-solid fa-check"></i>';
+            }
+        });
+    </script>
+</body>
+</html>

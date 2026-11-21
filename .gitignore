@@ -1,0 +1,39 @@
+# Environnement local & Secrets
+.env
+*.env.local
+
+# Clés cryptographiques & jetons de sécurité
+storage/keys/*
+!storage/keys/.gitkeep
+*.key
+*.token
+*.enc
+
+# Fichiers temporaires
+*.tmp
+
+# Byte-compiled / cache Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Base de données locale & stockage runtime
+*.db
+*.db-shm
+*.db-wal
+storage/*.db*
+storage/recordings/*
+!storage/recordings/.gitkeep
+storage/screenshots/*
+!storage/screenshots/.gitkeep
+storage/evidence/*
+!storage/evidence/.gitkeep
+storage/reports/*
+!storage/reports/.gitkeep
+storage/backups/*
+!storage/backups/.gitkeep
+storage/logs/*
+!storage/logs/.gitkeep
+storage/models/*
+!storage/models/.gitkeep

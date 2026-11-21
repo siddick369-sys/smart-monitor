@@ -1,0 +1,20 @@
+{
+  "name": "Smart Security Monitor - TP4",
+  "short_name": "SecurityMonitor",
+  "description": "Système professionnel de surveillance IoT, vision artificielle et détection multi-vectorielle",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "categories": ["security", "utilities", "productivity"],
+  "icons": [
+    {
+      "src": "/static/icons/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

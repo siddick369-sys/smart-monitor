@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mode Hors-Ligne — Smart Security Monitor</title>
+  <link rel="manifest" href="/static/manifest.json">
+  <meta name="theme-color" content="#0f172a">
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 flex flex-col items-center justify-center min-h-screen p-4">
+  <div class="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center shadow-2xl">
+    <div class="w-20 h-20 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-full flex items-center justify-center mx-auto mb-6">
+      <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 4.243a9 9 0 01-12.728 0m0 0l2.829-2.829m-2.829 2.829L3 21m5.636-12.728a5 5 0 017.072 0m-7.072 0L12 12"></path>
+      </svg>
+    </div>
+
+    <h1 class="text-2xl font-bold tracking-tight mb-2">Connexion Interrompue</h1>
+    <p class="text-sm text-slate-400 mb-6">
+      Vous êtes actuellement en mode hors-ligne. Le serveur de supervision local est temporairement inaccessible.
+    </p>
+
+    <div class="bg-slate-950/60 border border-slate-800/80 rounded-xl p-4 text-xs text-slate-400 text-left mb-6 space-y-2">
+      <div class="flex items-center space-x-2 text-emerald-400">
+        <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+        <span class="font-medium">Application PWA installée</span>
+      </div>
+      <p class="text-slate-500">
+        Les flux vidéo en direct et le contrôle des alarmes requièrent une connexion réseau locale active avec le Monitoring Host.
+      </p>
+    </div>
+
+    <button onclick="window.location.reload()" class="w-full py-3 px-4 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-xl transition duration-150 shadow-lg shadow-blue-500/20 flex items-center justify-center space-x-2">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+      </svg>
+      <span>Réessayer la connexion</span>
+    </button>
+  </div>
+</body>
+</html>
