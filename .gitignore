@@ -5,6 +5,8 @@
 # Clés cryptographiques & jetons de sécurité
 storage/keys/*
 !storage/keys/.gitkeep
+storage/keys/*.key
+storage/keys/*.token
 *.key
 *.token
 *.enc

@@ -40,6 +40,8 @@ class Device(Base):
     name = Column(String(128), nullable=False)
     ip = Column(String(64), nullable=False)
     port = Column(Integer, nullable=False, default=8080)
+    protocol = Column(String(32), default='ANDROID_IPWEBCAM')
+    rtsp_uri = Column(String(256), nullable=True)
     zones_json = Column(Text, default='[]')
     created_at = Column(Float, default=time.time)
     updated_at = Column(Float, default=time.time)
@@ -61,6 +63,8 @@ class Device(Base):
             "name": self.name,
             "ip": self.ip,
             "port": self.port,
+            "protocol": self.protocol or "ANDROID_IPWEBCAM",
+            "rtsp_uri": self.rtsp_uri,
             "zones": self.get_zones(),
             "created_at": self.created_at,
             "updated_at": self.updated_at

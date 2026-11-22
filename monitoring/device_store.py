@@ -29,15 +29,26 @@ class DeviceStore:
                     if db_devs:
                         self._devices = {}
                         for d in db_devs:
+                            proto = getattr(d, "protocol", "ANDROID_IPWEBCAM") or "ANDROID_IPWEBCAM"
+                            rtsp = getattr(d, "rtsp_uri", None)
+                            if proto in ["RTSP", "ONVIF"]:
+                                video_url = rtsp or f"rtsp://{d.ip}:{d.port}/live/ch0"
+                                sensors_url = ""
+                            else:
+                                video_url = f"http://{d.ip}:{d.port}/video"
+                                sensors_url = f"http://{d.ip}:{d.port}/sensors.json"
+
                             self._devices[d.id] = {
                                 "id": d.id,
                                 "name": d.name,
                                 "ip": d.ip,
                                 "port": d.port,
+                                "protocol": proto,
+                                "rtsp_uri": rtsp,
                                 "enable_torch": False,
                                 "enabled": True,
-                                "video_url": f"http://{d.ip}:{d.port}/video",
-                                "sensors_url": f"http://{d.ip}:{d.port}/sensors.json",
+                                "video_url": video_url,
+                                "sensors_url": sensors_url,
                                 "zones": d.get_zones()
                             }
                         loaded_from_db = True
@@ -85,6 +96,8 @@ class DeviceStore:
                                 name=dev_data.get("name", "Camera"),
                                 ip=dev_data.get("ip", "127.0.0.1"),
                                 port=int(dev_data.get("port", 8080)),
+                                protocol=dev_data.get("protocol", "ANDROID_IPWEBCAM"),
+                                rtsp_uri=dev_data.get("rtsp_uri"),
                                 zones_json=json.dumps(dev_data.get("zones", [])),
                                 created_at=time.time(),
                                 updated_at=time.time()
@@ -94,6 +107,8 @@ class DeviceStore:
                             db_dev.name = dev_data.get("name", db_dev.name)
                             db_dev.ip = dev_data.get("ip", db_dev.ip)
                             db_dev.port = int(dev_data.get("port", db_dev.port))
+                            db_dev.protocol = dev_data.get("protocol", getattr(db_dev, "protocol", "ANDROID_IPWEBCAM"))
+                            db_dev.rtsp_uri = dev_data.get("rtsp_uri", getattr(db_dev, "rtsp_uri", None))
                             db_dev.zones_json = json.dumps(dev_data.get("zones", []))
                             db_dev.updated_at = time.time()
             except Exception as sqle:
@@ -158,7 +173,7 @@ class DeviceStore:
                 pass
             return self._devices.get(device_id)
 
-    def add_device(self, name: str, ip: str, port: int, enable_torch: bool = False) -> dict:
+    def add_device(self, name: str, ip: str, port: int, enable_torch: bool = False, protocol: str = "ANDROID_IPWEBCAM", rtsp_uri: Optional[str] = None) -> dict:
         with self._lock:
             ip = ip.strip()
             try:
@@ -171,16 +186,28 @@ class DeviceStore:
             if not allowed:
                 raise ValueError(f"Adresse IP non autorisée ou port invalide : {reason}")
 
+            proto_normalized = str(protocol or "ANDROID_IPWEBCAM").strip().upper()
+            if proto_normalized in ["RTSP", "ONVIF"]:
+                video_url = rtsp_uri or f"rtsp://{ip}:{port}/live/ch0"
+                sensors_url = ""
+                enable_torch = False
+            else:
+                proto_normalized = "ANDROID_IPWEBCAM"
+                video_url = f"http://{ip}:{port}/video"
+                sensors_url = f"http://{ip}:{port}/sensors.json"
+
             device_id = f"dev_{uuid.uuid4().hex[:8]}"
             device_data = {
                 "id": device_id,
-                "name": name.strip() or f"Smartphone {len(self._devices) + 1}",
+                "name": name.strip() or f"Caméra {len(self._devices) + 1}",
                 "ip": ip,
                 "port": port,
+                "protocol": proto_normalized,
+                "rtsp_uri": rtsp_uri,
                 "enable_torch": bool(enable_torch),
                 "enabled": True,
-                "video_url": f"http://{ip}:{port}/video",
-                "sensors_url": f"http://{ip}:{port}/sensors.json",
+                "video_url": video_url,
+                "sensors_url": sensors_url,
                 "zones": []
             }
             self._devices[device_id] = device_data

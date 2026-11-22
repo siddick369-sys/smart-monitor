@@ -1,3 +1,4 @@
+import os
 import atexit
 import signal
 import sys
@@ -39,6 +40,11 @@ def setup_logging():
 
 def create_app(coordinator=None):
     """Usine de création de l'application Flask avec protections et journalisation."""
+    # Validation obligatoire de la configuration de sécurité au démarrage (SEC-1241-02)
+    # Refuse catégoriquement de démarrer si la configuration est compromise ou invalide en production
+    is_prod = getattr(config, "IS_PRODUCTION", False) or os.environ.get("APP_ENV", "").lower() in ["production", "prod"]
+    config.validate_security_configuration(strict_production=is_prod)
+
     init_db()
     app = Flask(__name__, static_folder="static", template_folder="templates")
     app.config["SECRET_KEY"] = config.SECRET_KEY

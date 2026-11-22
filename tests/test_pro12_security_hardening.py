@@ -174,9 +174,15 @@ def test_p12_03_p2p_secret_enforcement_and_resilience():
         # Traitement d'un lot d'événements P2P
         now = time.time()
         ev_id = f"p2p_device_edge_01_1_{int(now)}"
-        msg = f"{ev_id}:device_edge_01:1:ALARM:{now}"
-        import hmac, hashlib
-        sig = hmac.new(valid_cluster_secret.encode("utf-8"), msg.encode("utf-8"), hashlib.sha256).hexdigest()
+        sig = mgr.compute_event_signature(
+            event_id=ev_id,
+            device_id="device_edge_01",
+            sequence_num=1,
+            event_type="ALARM",
+            timestamp=now,
+            payload={},
+            proto_version="SSMP2P02"
+        )
 
         batch = [{
             "event_id": ev_id,
@@ -184,6 +190,8 @@ def test_p12_03_p2p_secret_enforcement_and_resilience():
             "sequence_num": 1,
             "event_type": "ALARM",
             "timestamp": now,
+            "payload": {},
+            "proto_version": "SSMP2P02",
             "signature": sig
         }]
         b_ok, b_count, b_ids, _ = mgr.receive_sync_batch("device_edge_01", device_token, batch)

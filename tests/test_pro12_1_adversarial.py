@@ -156,16 +156,25 @@ def test_adversarial_p2p_anti_replay_and_forgery():
     _, count_past, _, _ = sync_mgr.receive_sync_batch(device_id, device_token, [past_ev])
     assert count_past == 0
 
-    # 4. Scénario Légitime : Message conforme -> ACCEPTÉ
+    # 4. Scénario Légitime : Message conforme SSMP2P02 -> ACCEPTÉ
     ev_legit_id = f"p2p_{device_id}_4_{int(now)}"
-    msg_legit = f"{ev_legit_id}:{device_id}:4:MOTION:{now}"
-    sig_legit = hmac.new(secret.encode("utf-8"), msg_legit.encode("utf-8"), hashlib.sha256).hexdigest()
+    sig_legit = sync_mgr.compute_event_signature(
+        event_id=ev_legit_id,
+        device_id=device_id,
+        sequence_num=4,
+        event_type="MOTION",
+        timestamp=now,
+        payload={},
+        proto_version="SSMP2P02"
+    )
     legit_ev = {
         "event_id": ev_legit_id,
         "device_id": device_id,
         "sequence_num": 4,
         "event_type": "MOTION",
         "timestamp": now,
+        "payload": {},
+        "proto_version": "SSMP2P02",
         "signature": sig_legit
     }
     _, count_legit, accepted_ids, _ = sync_mgr.receive_sync_batch(device_id, device_token, [legit_ev])
@@ -185,11 +194,18 @@ def test_adversarial_p2p_concurrent_duplicate_injection():
     token = "token_race_999"
     sync_mgr.register_device(device_id, token)
 
+    import uuid
     now = time.time()
-    ev_id = f"p2p_{device_id}_race_{int(now)}"
-    import hmac, hashlib
-    msg = f"{ev_id}:{device_id}:1:ALARM:{now}"
-    sig = hmac.new(secret.encode("utf-8"), msg.encode("utf-8"), hashlib.sha256).hexdigest()
+    ev_id = f"p2p_{device_id}_race_{uuid.uuid4().hex[:8]}"
+    sig = sync_mgr.compute_event_signature(
+        event_id=ev_id,
+        device_id=device_id,
+        sequence_num=1,
+        event_type="ALARM",
+        timestamp=now,
+        payload={},
+        proto_version="SSMP2P02"
+    )
 
     event_payload = [{
         "event_id": ev_id,
@@ -197,6 +213,8 @@ def test_adversarial_p2p_concurrent_duplicate_injection():
         "sequence_num": 1,
         "event_type": "ALARM",
         "timestamp": now,
+        "payload": {},
+        "proto_version": "SSMP2P02",
         "signature": sig
     }]
 
@@ -213,6 +231,15 @@ def test_adversarial_p2p_concurrent_duplicate_injection():
 
     # Exactement un thread doit avoir intégré l'événement (somme == 1)
     assert sum(results) == 1
+
+    # Nettoyage d'isolation SQLite
+    try:
+        from database import get_db_session
+        from monitoring.models import P2PReceivedEvent
+        with get_db_session() as db:
+            db.query(P2PReceivedEvent).filter(P2PReceivedEvent.event_id == ev_id).delete()
+    except Exception:
+        pass
 
 
 # =============================================================================

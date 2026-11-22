@@ -427,18 +427,26 @@ def test_persistent_p2p_anti_replay_across_restart():
 
     now = time.time()
     ev_id = f"p2p_{device_id}_seq1_{int(now)}"
-    msg = f"{ev_id}:{device_id}:1:INTRUSION_DETECTED:{now}"
-    import hmac
-    import hashlib
-    sig = hmac.new(secret.encode("utf-8"), msg.encode("utf-8"), hashlib.sha256).hexdigest()
+    payload_1 = {"zone": "gate"}
+    sig = p2p_1.compute_event_signature(
+        event_id=ev_id,
+        device_id=device_id,
+        sequence_num=1,
+        event_type="INTRUSION_DETECTED",
+        timestamp=now,
+        payload=payload_1,
+        proto_version="SSMP2P02"
+    )
 
     batch = [{
         "event_id": ev_id,
+        "device_id": device_id,
         "sequence_num": 1,
         "event_type": "INTRUSION_DETECTED",
         "timestamp": now,
         "signature": sig,
-        "payload": {"zone": "gate"}
+        "proto_version": "SSMP2P02",
+        "payload": payload_1
     }]
 
     ok1, count1, ids1, _ = p2p_1.receive_sync_batch(device_id, device_token, batch, require_event_signatures=True)
@@ -460,15 +468,25 @@ def test_persistent_p2p_anti_replay_across_restart():
 
     # Un nouvel événement avec un nouvel ID et séquence doit être accepté
     ev_id_2 = f"p2p_{device_id}_seq2_{int(now+1)}"
-    msg2 = f"{ev_id_2}:{device_id}:2:DOOR_CLOSED:{now+1}"
-    sig2 = hmac.new(secret.encode("utf-8"), msg2.encode("utf-8"), hashlib.sha256).hexdigest()
+    payload_2 = {"status": "closed"}
+    sig2 = p2p_2.compute_event_signature(
+        event_id=ev_id_2,
+        device_id=device_id,
+        sequence_num=2,
+        event_type="DOOR_CLOSED",
+        timestamp=now + 1,
+        payload=payload_2,
+        proto_version="SSMP2P02"
+    )
     batch_new = [{
         "event_id": ev_id_2,
+        "device_id": device_id,
         "sequence_num": 2,
         "event_type": "DOOR_CLOSED",
         "timestamp": now + 1,
         "signature": sig2,
-        "payload": {"status": "closed"}
+        "proto_version": "SSMP2P02",
+        "payload": payload_2
     }]
     ok3, count3, ids3, _ = p2p_2.receive_sync_batch(device_id, device_token, batch_new, require_event_signatures=True)
     assert ok3 is True

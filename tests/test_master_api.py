@@ -162,14 +162,48 @@ def test_p2p_and_intercom_endpoints(auth_client):
     assert res.status_code == 200
     assert res.get_json()["status"] == "ok"
 
-    # 2. P2P sync batch with auth
+    # 2. P2P sync batch with auth (SSMP2P02 strict protocol)
     device_id = "device_phone_01"
     token = "secret_tok_test_456"
     coordinator.p2p_sync_mgr.register_device(device_id, token)
 
+    now = time.time()
+    # 2.1 Rejet fail-closed des messages legacy / sans proto_version
+    res_legacy = client.post(
+        '/api/p2p/sync_batch',
+        json={"events": [{"event_id": "ev_p2p_legacy", "event_type": "ALERTE_P2P", "timestamp": now}]},
+        headers={
+            "X-Device-ID": device_id,
+            "X-Device-Token": token
+        }
+    )
+    assert res_legacy.status_code == 200
+    assert res_legacy.get_json()["synced_count"] == 0
+
+    # 2.2 Acceptation conforme du message SSMP2P02 avec payload signé canoniquement
+    payload = {"alert_code": "P2P_ALERT_01", "level": "WARNING"}
+    sig = coordinator.p2p_sync_mgr.compute_event_signature(
+        event_id="ev_p2p_01",
+        device_id=device_id,
+        sequence_num=1,
+        event_type="ALERTE_P2P",
+        timestamp=now,
+        payload=payload,
+        proto_version="SSMP2P02"
+    )
+    event_obj = {
+        "event_id": "ev_p2p_01",
+        "device_id": device_id,
+        "sequence_num": 1,
+        "event_type": "ALERTE_P2P",
+        "timestamp": now,
+        "payload": payload,
+        "proto_version": "SSMP2P02",
+        "signature": sig
+    }
     res_sync = client.post(
         '/api/p2p/sync_batch',
-        json={"events": [{"event_id": "ev_p2p_01", "event_type": "ALERTE_P2P", "timestamp": time.time()}]},
+        json={"events": [event_obj]},
         headers={
             "X-Device-ID": device_id,
             "X-Device-Token": token
@@ -177,6 +211,7 @@ def test_p2p_and_intercom_endpoints(auth_client):
     )
     assert res_sync.status_code == 200
     assert res_sync.get_json()["synced_count"] == 1
+    assert "ev_p2p_01" in res_sync.get_json()["accepted_ids"]
 
     # 3. Intercom status
     res = client.get('/api/intercom/status')

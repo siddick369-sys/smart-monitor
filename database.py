@@ -54,6 +54,14 @@ def init_db():
         if "user_id" not in existing_notif_cols:
             cursor.execute("ALTER TABLE notifications ADD COLUMN user_id VARCHAR(64);")
 
+        # Migration idempotente des colonnes NVR universel dans 'devices' (PRO-13 Lot A)
+        cursor.execute("PRAGMA table_info(devices);")
+        existing_dev_cols = [row[1] for row in cursor.fetchall()]
+        if "protocol" not in existing_dev_cols:
+            cursor.execute("ALTER TABLE devices ADD COLUMN protocol VARCHAR(32) DEFAULT 'ANDROID_IPWEBCAM';")
+        if "rtsp_uri" not in existing_dev_cols:
+            cursor.execute("ALTER TABLE devices ADD COLUMN rtsp_uri VARCHAR(256);")
+
         raw_conn.commit()
         cursor.close()
         raw_conn.close()

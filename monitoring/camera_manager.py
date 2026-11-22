@@ -3,19 +3,36 @@ import numpy as np
 import threading
 import time
 from collections import deque
-from typing import Dict, Optional, Tuple, List, Callable
+from typing import Dict, Optional, Tuple, List, Callable, Any
 import config
 
 class CameraWorker(threading.Thread):
     """Thread dédié à l'acquisition vidéo indépendante, avec backoff progressif et tampon circulaire."""
 
     def __init__(self, device_id: str, video_url: str, buffer_size: int = config.CIRCULAR_BUFFER_SIZE,
-                 on_state_change: Optional[Callable[[str, str, str], None]] = None):
+                 on_state_change: Optional[Callable[[str, str, str], None]] = None,
+                 video_source: Optional[Any] = None):
         super().__init__(name=f"CameraWorker-{device_id}", daemon=True)
         self.device_id = device_id
         self.video_url = video_url
         self.buffer_size = buffer_size
         self.on_state_change = on_state_change
+        self.video_source = video_source
+
+        # Initialisation automatique de l'adaptateur RTSP FFmpeg pour les flux RTSP
+        if self.video_source is None and isinstance(video_url, str) and video_url.startswith("rtsp://"):
+            try:
+                from monitoring.acquisition.ffmpeg_adapter import FFmpegRTSPAdapter
+                from monitoring.acquisition.interfaces import CameraConnectionConfig, CameraProtocol
+                cfg = CameraConnectionConfig(
+                    source_id=device_id,
+                    protocol=CameraProtocol.RTSP,
+                    uri=video_url,
+                    allow_loopback=getattr(config, "ALLOW_LOOPBACK_SIMULATOR", False)
+                )
+                self.video_source = FFmpegRTSPAdapter(cfg)
+            except Exception as e:
+                print(f"[CameraWorker-{device_id}] Info initialisation FFmpegRTSPAdapter : {e}")
 
         self._stop_event = threading.Event()
         self._lock = threading.Lock()
@@ -69,6 +86,10 @@ class CameraWorker(threading.Thread):
         return img
 
     def run(self):
+        if self.video_source is not None:
+            self._run_video_source_loop()
+            return
+
         from urllib.parse import urlparse
         while not self._stop_event.is_set():
             cap = None
@@ -136,8 +157,44 @@ class CameraWorker(threading.Thread):
                 time.sleep(self.current_backoff)
                 self.current_backoff = min(self.current_backoff * 1.5, config.CAMERA_MAX_BACKOFF)
 
+    def _run_video_source_loop(self):
+        """Boucle d'acquisition s'appuyant sur une source abstraite VideoSource."""
+        self._set_status("CONNECTÉ", "")
+        connected = self.video_source.connect()
+        if not connected:
+            self._set_status("ERREUR DE CONNEXION", "Échec de connexion VideoSource")
+            self._placeholder_frame = self._create_placeholder("CONNEXION IMPOSSIBLE (NVR)", (0, 0, 255))
+
+        while not self._stop_event.is_set():
+            success, vframe, err = self.video_source.read_frame()
+            now = time.time()
+            if success and vframe is not None and not vframe.is_placeholder:
+                with self._lock:
+                    self.latest_frame = vframe.data
+                    self.last_frame_time = vframe.timestamp_utc
+                    self.circular_buffer.append((vframe.timestamp_utc, vframe.data.copy()))
+                    if self.status != "CONNECTÉ":
+                        self._set_status("CONNECTÉ", "")
+            else:
+                if vframe and vframe.is_placeholder:
+                    self._placeholder_frame = vframe.data
+                self._set_status("ERREUR DE CONNEXION", err or "Flux indisponible")
+
+            target_delay = 1.0 / config.CAMERA_FPS
+            time.sleep(target_delay)
+
+        try:
+            self.video_source.close()
+        except Exception:
+            pass
+
     def stop(self):
         self._stop_event.set()
+        if self.video_source is not None:
+            try:
+                self.video_source.close()
+            except Exception:
+                pass
 
     def get_frame(self) -> np.ndarray:
         """Retourne la dernière frame reçue ou la mire de substitution si le flux est périmé."""
@@ -165,10 +222,10 @@ class CameraManager:
         self.on_state_change = on_state_change
         self.zone_provider = zone_provider
 
-    def start_camera(self, device_id: str, video_url: str):
+    def start_camera(self, device_id: str, video_url: str, video_source: Optional[Any] = None):
         with self._lock:
             self.stop_camera(device_id)
-            worker = CameraWorker(device_id, video_url, on_state_change=self.on_state_change)
+            worker = CameraWorker(device_id, video_url, on_state_change=self.on_state_change, video_source=video_source)
             self._workers[device_id] = worker
             worker.start()
 

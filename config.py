@@ -266,22 +266,60 @@ def is_allowed_camera_target(ip_str: str, port: int, is_test_env: Optional[bool]
     except ValueError:
         return False, f"Format d'adresse IP invalide : '{ip_str}'."
 
-def validate_security_configuration(strict_production: bool = False) -> dict:
-    """Valide l'état de la configuration de sécurité sans jamais divulguer les secrets."""
-    is_prod_secure_valid = (not IS_PRODUCTION) or (SESSION_COOKIE_SECURE and SESSION_COOKIE_HTTPONLY)
-    secret_key_safe = (not IS_PRODUCTION) or (SECRET_KEY != "smart-security-monitor-secret-dev-2026" and len(SECRET_KEY) >= 32)
-    hmac_key_safe = bool(EVIDENCE_HMAC_KEY and len(EVIDENCE_HMAC_KEY) >= 16)
+def validate_security_configuration(strict_production: Optional[bool] = None) -> dict:
+    """Valide l'état de la configuration de sécurité sans jamais divulguer les secrets.
+    En production, applique une politique stricte fail-closed interdisant tout paramètre faible, absent ou par défaut (SEC-1241-02).
+    """
+    raw_env = os.environ.get("APP_ENV", os.environ.get("FLASK_ENV", "")).strip().lower()
+    is_prod = IS_PRODUCTION if strict_production is None else bool(strict_production)
+    if raw_env in ["production", "prod"]:
+        is_prod = True
 
-    if strict_production and IS_PRODUCTION:
-        if not is_prod_secure_valid:
-            raise ValueError("Configuration de cookies non sécurisée en environnement de production.")
-        if not secret_key_safe:
-            raise ValueError("SECRET_KEY non sécurisée ou par défaut en production.")
+    is_prod_secure_valid = (not is_prod) or (SESSION_COOKIE_SECURE and SESSION_COOKIE_HTTPONLY)
+
+    weak_keys = {
+        "smart-security-monitor-secret-dev-2026",
+        "secret", "changeme", "admin", "password", "default", "123456", "dev", "test"
+    }
+    cur_secret = str(SECRET_KEY or "").strip()
+    secret_key_safe = (not is_prod) or (
+        bool(cur_secret) and
+        cur_secret not in weak_keys and
+        len(cur_secret) >= 32
+    )
+
+    cur_hmac = str(EVIDENCE_HMAC_KEY or "").strip()
+    hmac_key_safe = bool(cur_hmac and len(cur_hmac) >= 16)
+
+    cur_p2p = str(P2P_CLUSTER_SECRET or "").strip()
+    p2p_safe = bool(cur_p2p and len(cur_p2p) >= 32)
+
+    if is_prod:
+        if not cur_secret or cur_secret in weak_keys:
+            raise ValueError("SECRET_KEY absente, vide ou par défaut en production.")
+        if len(cur_secret) < 32:
+            raise ValueError("SECRET_KEY trop courte en production (minimum 32 caractères requis).")
+        if not SESSION_COOKIE_SECURE:
+            raise ValueError("Configuration de cookies non sécurisée en environnement de production (SESSION_COOKIE_SECURE requis).")
+        if not SESSION_COOKIE_HTTPONLY:
+            raise ValueError("Configuration de cookies non sécurisée en environnement de production (SESSION_COOKIE_HTTPONLY requis).")
+        if SESSION_COOKIE_SAMESITE not in ["Lax", "Strict"]:
+            raise ValueError("SESSION_COOKIE_SAMESITE invalide en production (doit être 'Lax' ou 'Strict').")
         if not hmac_key_safe:
-            raise ValueError("EVIDENCE_HMAC_KEY manquant ou trop court en production.")
+            raise ValueError("EVIDENCE_HMAC_KEY manquant ou trop court en production (minimum 16 caractères).")
+        if DEBUG:
+            raise ValueError("DEBUG=True est strictement interdit en environnement de production.")
+        if ALLOW_LOOPBACK_SIMULATOR:
+            raise ValueError("ALLOW_LOOPBACK_SIMULATOR=True est strictement interdit en environnement de production.")
+
+        # Contrôle des variables booléennes environnementales malformées
+        for var_name in ["SESSION_COOKIE_SECURE", "SESSION_COOKIE_HTTPONLY", "DEBUG", "ALLOW_LOOPBACK_SIMULATOR"]:
+            raw_val = os.environ.get(var_name, "").strip().lower()
+            if raw_val and raw_val not in ["true", "1", "yes", "false", "0", "no"]:
+                raise ValueError(f"Valeur booléenne invalide pour {var_name} en production : '{raw_val}'.")
 
     return {
-        "is_production": IS_PRODUCTION,
+        "is_production": is_prod,
         "session_cookie_secure": SESSION_COOKIE_SECURE,
         "session_cookie_httponly": SESSION_COOKIE_HTTPONLY,
         "session_cookie_samesite": SESSION_COOKIE_SAMESITE,
@@ -289,7 +327,7 @@ def validate_security_configuration(strict_production: bool = False) -> dict:
         "secret_key_production_safe": secret_key_safe,
         "trusted_proxies_count": TRUSTED_PROXIES_COUNT,
         "evidence_hmac_configured": hmac_key_safe,
-        "p2p_secret_configured": bool(P2P_CLUSTER_SECRET and len(P2P_CLUSTER_SECRET) >= 32),
+        "p2p_secret_configured": p2p_safe,
         "privacy_master_key_configured": bool(PRIVACY_MASTER_KEY or os.path.exists(PRIVACY_KEY_FILE)),
         "loopback_allowed": ALLOW_LOOPBACK_SIMULATOR
     }

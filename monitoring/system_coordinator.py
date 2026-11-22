@@ -33,6 +33,7 @@ from monitoring.spatial_tracker import SpatialTracker
 from monitoring.pose_detector import PoseDetector
 from monitoring.p2p_sync import P2PSyncManager
 from monitoring.intercom import IntercomManager
+from monitoring.acquisition.discovery import UnifiedDiscoveryManager
 
 class SystemCoordinator:
     """Coordinateur central orchestrant l'ensemble des modules du Monitoring Host."""
@@ -114,6 +115,7 @@ class SystemCoordinator:
         self.intercom_mgr = IntercomManager(
             max_strobe_duration_seconds=getattr(config, "INTERCOM_MAX_STROBE_DURATION", 8.0)
         )
+        self.discovery_manager = UnifiedDiscoveryManager()
 
         self._started = False
         self._lock = threading.RLock()
@@ -287,12 +289,13 @@ class SystemCoordinator:
                 self.semantic_search_engine.close()
             print("[SystemCoordinator] Monitoring Host arrêté.")
 
-    def add_device(self, name: str, ip: str, port: int, enable_torch: bool = False) -> dict:
+    def add_device(self, name: str, ip: str, port: int, enable_torch: bool = False, protocol: str = "ANDROID_IPWEBCAM", rtsp_uri: Optional[str] = None) -> dict:
         with self._lock:
-            device = self.device_store.add_device(name, ip, port, enable_torch)
+            device = self.device_store.add_device(name, ip, port, enable_torch, protocol=protocol, rtsp_uri=rtsp_uri)
             if self._started and device.get("enabled", True):
                 self.camera_manager.start_camera(device["id"], device["video_url"])
-                self.sensor_manager.start_sensor_polling(device["id"], device["sensors_url"])
+                if device.get("sensors_url"):
+                    self.sensor_manager.start_sensor_polling(device["id"], device["sensors_url"])
             return device
 
     def update_device(self, device_id: str, **kwargs) -> Optional[dict]:

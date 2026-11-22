@@ -490,8 +490,20 @@ def test_p123_16_p2p_anti_replay_across_restart():
     token = "token_dev_persist_secret"
     ev_id = f"ev_persist_{uuid.uuid4().hex[:8]}"
     now = time.time()
-    msg = f"{ev_id}:{device_id}:1:INTRUSION:{now}"
-    sig = hmac.new(secret.encode("utf-8"), msg.encode("utf-8"), hashlib.sha256).hexdigest()
+    payload = {}
+
+    # 1. Première intégration
+    mgr1 = P2PSyncManager(cluster_secret=secret, persist_events=True)
+    mgr1.register_device(device_id, token)
+    sig = mgr1.compute_event_signature(
+        event_id=ev_id,
+        device_id=device_id,
+        sequence_num=1,
+        event_type="INTRUSION",
+        timestamp=now,
+        payload=payload,
+        proto_version="SSMP2P02"
+    )
 
     batch = [{
         "event_id": ev_id,
@@ -499,12 +511,11 @@ def test_p123_16_p2p_anti_replay_across_restart():
         "sequence_num": 1,
         "event_type": "INTRUSION",
         "timestamp": now,
+        "payload": payload,
+        "proto_version": "SSMP2P02",
         "signature": sig
     }]
 
-    # 1. Première intégration
-    mgr1 = P2PSyncManager(cluster_secret=secret, persist_events=True)
-    mgr1.register_device(device_id, token)
     ok1, count1, ids1, _ = mgr1.receive_sync_batch(device_id, token, batch, require_event_signatures=True)
     assert count1 == 1
 
@@ -529,13 +540,25 @@ def test_p123_17_p2p_concurrent_replay_8_processes():
             token = "token_mp_secret_123"
             ev_id = f"ev_mp_{uuid.uuid4().hex[:8]}"
             now = time.time()
-            sig = hmac.new(secret.encode("utf-8"), f"{ev_id}:{device_id}:1:MOTION:{now}".encode("utf-8"), hashlib.sha256).hexdigest()
+            payload = {}
+            mgr_signer = P2PSyncManager(cluster_secret=secret, persist_events=False)
+            sig = mgr_signer.compute_event_signature(
+                event_id=ev_id,
+                device_id=device_id,
+                sequence_num=1,
+                event_type="MOTION",
+                timestamp=now,
+                payload=payload,
+                proto_version="SSMP2P02"
+            )
             batch = [{
                 "event_id": ev_id,
                 "device_id": device_id,
                 "sequence_num": 1,
                 "event_type": "MOTION",
                 "timestamp": now,
+                "payload": payload,
+                "proto_version": "SSMP2P02",
                 "signature": sig
             }]
 

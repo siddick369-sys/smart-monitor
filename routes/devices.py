@@ -18,16 +18,18 @@ def create_devices_blueprint(coordinator):
         ip = str(data.get("ip", "")).strip()
         port = data.get("port", 8080)
         enable_torch = bool(data.get("enable_torch", False))
+        protocol = str(data.get("protocol", "ANDROID_IPWEBCAM")).strip().upper()
+        rtsp_uri = data.get("rtsp_uri")
 
         if not ip:
             return jsonify({"status": "error", "message": "L'adresse IP est obligatoire."}), 400
 
         # Limitation raisonnable du nombre d'appareils pour préserver les ressources CPU/réseau
         if len(coordinator.device_store.get_all_devices()) >= 10:
-            return jsonify({"status": "error", "message": "Limite maximale de 10 smartphones atteinte."}), 400
+            return jsonify({"status": "error", "message": "Limite maximale de 10 appareils atteinte."}), 400
 
         try:
-            device = coordinator.add_device(name, ip, port, enable_torch)
+            device = coordinator.add_device(name, ip, port, enable_torch, protocol=protocol, rtsp_uri=rtsp_uri)
             return jsonify({"status": "ok", "device": device}), 201
         except ValueError as ve:
             return jsonify({"status": "error", "message": str(ve)}), 400
@@ -153,5 +155,84 @@ def create_devices_blueprint(coordinator):
         if success:
             return jsonify({"status": "ok", "message": "Zone supprimée avec succès."})
         return jsonify({"status": "error", "message": "Zone introuvable."}), 404
+
+    # ==========================================
+    # FONCTIONNALITÉ : DÉCOUVERTE RÉSEAU (LOT A)
+    # ==========================================
+
+    @bp.route('/api/discovery/scan', methods=['POST'])
+    @login_required
+    @roles_required("ADMIN", "OPERATOR")
+    def trigger_discovery_scan():
+        """Lance une analyse réseau passive/active (WS-Discovery, SSDP) sans enrôlement automatique."""
+        allow_loopback = getattr(config, "ALLOW_LOOPBACK_SIMULATOR", False)
+        candidates = coordinator.discovery_manager.scan_network(allow_loopback=allow_loopback)
+        return jsonify({"status": "ok", "count": len(candidates), "candidates": candidates})
+
+    @bp.route('/api/discovery/candidates', methods=['GET'])
+    @login_required
+    @roles_required("ADMIN", "OPERATOR")
+    def list_discovery_candidates():
+        """Liste tous les équipements détectés en attente d'approbation explicite."""
+        candidates = [
+            {
+                "candidate_id": c.candidate_id,
+                "protocol": c.discovery_protocol,
+                "ip": c.ip,
+                "port": c.port,
+                "name": c.name,
+                "server_info": c.server_info,
+                "discovered_at": c.discovered_at,
+                "status": c.status,
+                "metadata": c.metadata
+            }
+            for c in coordinator.discovery_manager._all_candidates.values()
+        ]
+        return jsonify({"status": "ok", "candidates": candidates})
+
+    @bp.route('/api/discovery/candidates/<candidate_id>/approve', methods=['POST'])
+    @login_required
+    @roles_required("ADMIN")
+    def approve_discovery_candidate(candidate_id):
+        """Approbation formelle d'un équipement découvert et enrôlement contrôlé."""
+        from flask import session
+        username = session.get("username", "admin")
+        data = request.get_json(silent=True) or {}
+        custom_name = data.get("name")
+
+        cand = coordinator.discovery_manager.approve_candidate(candidate_id, username)
+        if not cand:
+            return jsonify({"status": "error", "message": "Candidat introuvable."}), 404
+
+        name = custom_name or cand.name or f"Caméra {cand.ip}"
+        protocol = "ONVIF" if cand.discovery_protocol == "WS_DISCOVERY" else "RTSP"
+        rtsp_uri = cand.metadata.get("rtsp_uri") if cand.metadata else None
+
+        # Enrôlement explicite
+        device = coordinator.add_device(
+            name=name,
+            ip=cand.ip,
+            port=cand.port,
+            enable_torch=False,
+            protocol=protocol,
+            rtsp_uri=rtsp_uri
+        )
+        return jsonify({
+            "status": "ok",
+            "message": f"Appareil {name} ({candidate_id}) approuvé et enrôlé avec succès.",
+            "device": device
+        }), 201
+
+    @bp.route('/api/discovery/candidates/<candidate_id>/reject', methods=['POST'])
+    @login_required
+    @roles_required("ADMIN")
+    def reject_discovery_candidate(candidate_id):
+        """Rejet et purge d'un équipement découvert."""
+        from flask import session
+        username = session.get("username", "admin")
+        ok = coordinator.discovery_manager.reject_candidate(candidate_id, username)
+        if ok:
+            return jsonify({"status": "ok", "message": f"Candidat {candidate_id} rejeté."})
+        return jsonify({"status": "error", "message": "Candidat introuvable."}), 404
 
     return bp
