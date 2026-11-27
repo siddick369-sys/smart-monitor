@@ -27,6 +27,39 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
 # Session scoped thread-safe
 SessionLocal = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=engine))
 
+
+def is_protected_production_db_path(candidate_path: str) -> bool:
+    """Vérifie si un chemin pointe vers la base persistante protégée storage/security_monitor.db."""
+    if not candidate_path or candidate_path == ":memory:":
+        return False
+    cleaned = str(candidate_path).replace("\\", "/")
+    if cleaned.startswith("sqlite:///"):
+        cleaned = cleaned[len("sqlite:///"):]
+    protected = os.path.normcase(
+        os.path.realpath(os.path.abspath(os.path.join(config.STORAGE_DIR, "security_monitor.db")))
+    )
+    resolved = os.path.normcase(os.path.realpath(os.path.abspath(os.path.normpath(cleaned))))
+    return resolved == protected
+
+
+def rebind_database(db_path: str, initialize: bool = True) -> None:
+    """Reconfigure proprement le moteur SQLAlchemy et SessionLocal vers une base cible."""
+    global engine
+    SessionLocal.remove()
+    try:
+        engine.dispose()
+    except Exception:
+        pass
+    config.DB_PATH = db_path
+    engine = create_engine(
+        f"sqlite:///{db_path}",
+        connect_args={"check_same_thread": False, "timeout": 15},
+        echo=False
+    )
+    SessionLocal.configure(bind=engine)
+    if initialize:
+        init_db()
+
 def init_db():
     """Initialise le schéma de base de données SQLite et applique les migrations légères."""
     os.makedirs(os.path.dirname(config.DB_PATH), exist_ok=True)
@@ -61,6 +94,16 @@ def init_db():
             cursor.execute("ALTER TABLE devices ADD COLUMN protocol VARCHAR(32) DEFAULT 'ANDROID_IPWEBCAM';")
         if "rtsp_uri" not in existing_dev_cols:
             cursor.execute("ALTER TABLE devices ADD COLUMN rtsp_uri VARCHAR(256);")
+
+        # Migration idempotente des colonnes cryptographiques v2 dans 'integrity_log' (PRO-13 A.4.4 Lot B)
+        cursor.execute("PRAGMA table_info(integrity_log);")
+        existing_int_cols = [row[1] for row in cursor.fetchall()]
+        if "format_version" not in existing_int_cols:
+            cursor.execute("ALTER TABLE integrity_log ADD COLUMN format_version INTEGER NOT NULL DEFAULT 1;")
+        if "algorithm" not in existing_int_cols:
+            cursor.execute("ALTER TABLE integrity_log ADD COLUMN algorithm VARCHAR(64);")
+        if "key_id" not in existing_int_cols:
+            cursor.execute("ALTER TABLE integrity_log ADD COLUMN key_id VARCHAR(64);")
 
         raw_conn.commit()
         cursor.close()

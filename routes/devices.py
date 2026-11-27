@@ -1,3 +1,4 @@
+import re
 from flask import Blueprint, jsonify, request, Response
 import config
 from monitoring.auth_manager import login_required, roles_required
@@ -6,6 +7,8 @@ def create_devices_blueprint(coordinator):
     bp = Blueprint('devices', __name__)
 
     @bp.route('/api/devices', methods=['GET'])
+    @login_required
+    @roles_required("ADMIN", "OPERATOR", "AUDITOR")
     def list_devices():
         return jsonify(coordinator.device_store.get_all_devices())
 
@@ -61,8 +64,14 @@ def create_devices_blueprint(coordinator):
         return jsonify({"status": "error", "message": "Appareil non trouvé."}), 404
 
     @bp.route('/video_feed/<device_id>')
+    @login_required
+    @roles_required("ADMIN", "OPERATOR", "AUDITOR")
     def video_feed(device_id):
         """Flux vidéo MJPEG en direct pour un smartphone avec en-têtes standard."""
+        if not device_id or not re.match(r'^[a-zA-Z0-9_-]+$', device_id):
+            return jsonify({"status": "error", "message": "Identifiant d'appareil invalide."}), 400
+        if not coordinator.device_store.get_device(device_id):
+            return jsonify({"status": "error", "message": "Appareil introuvable."}), 404
         return Response(
             coordinator.camera_manager.generate_mjpeg_stream(device_id),
             mimetype='multipart/x-mixed-replace; boundary=frame',
@@ -94,7 +103,11 @@ def create_devices_blueprint(coordinator):
     # ==========================================
 
     @bp.route('/api/devices/<device_id>/zones', methods=['GET'])
+    @login_required
+    @roles_required("ADMIN", "OPERATOR", "AUDITOR")
     def list_zones(device_id):
+        if not device_id or not re.match(r'^[a-zA-Z0-9_-]+$', device_id):
+            return jsonify({"status": "error", "message": "Identifiant d'appareil invalide."}), 400
         device = coordinator.device_store.get_device(device_id)
         if not device:
             return jsonify({"status": "error", "message": "Appareil introuvable."}), 404

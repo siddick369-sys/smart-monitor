@@ -1,0 +1,47 @@
+# =============================================================================
+# SMART SECURITY MONITOR — DOCKERFILE D'ACQUISITION NVR ISOLÉ
+# Programme PRO-13 — Lot A.4 : Conteneur Worker Unprivilégié
+# =============================================================================
+
+FROM python:3.11-slim-bookworm
+
+# Métadonnées de sécurité
+LABEL maintainer="SSM Defensive Engineering Team" \
+      version="PRO-13-A.4" \
+      description="Worker d'acquisition vidéo FFmpeg autonome et durci"
+
+# Installation du binaire FFmpeg officiel et des bibliothèques système minimales
+# Note (PRO-13 A.4.2) : iptables n'est pas installé dans le conteneur non-privilégié (cap_drop: ALL).
+# Le filtrage réseau doit être appliqué sur l'hôte Docker via DOCKER-USER / nftables.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    ca-certificates \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Création du groupe et de l'utilisateur non privilégié dédié
+RUN groupadd -g 10001 ssmworker && \
+    useradd -u 10001 -g ssmworker -d /app -s /usr/sbin/nologin ssmworker
+
+WORKDIR /app
+
+# Copie des fichiers d'application nécessaires à l'acquisition NVR
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY config.py .
+COPY monitoring/ ./monitoring/
+
+# Droits stricts en lecture seule pour l'utilisateur ssmworker
+RUN chown -R root:root /app && \
+    chmod -R 755 /app
+
+# Bascule sur l'utilisateur non-privilégié
+USER 10001:10001
+
+STOPSIGNAL SIGTERM
+
+ENTRYPOINT ["python", "-m", "monitoring.acquisition.ffmpeg_adapter"]

@@ -1,6 +1,13 @@
 """
-Module d'intégration ONVIF (Profile S / Profile T) et WS-Discovery.
+Module d'intégration ONVIF WS-Discovery.
 Architecture NVR universelle PRO-13.
+
+NOTE ARCHITECTURALE & PÉRIMÈTRE DE SÉCURITÉ (A1-004) :
+Ce module implémente EXCLUSIVEMENT la découverte réseau WS-Discovery (SOAP/UDP).
+Les services SOAP Media (ONVIF Profile S / Profile T, GetStreamUri, GetProfiles, PTZ)
+ne sont PAS implémentés dans cette version. L'URI RTSP par défaut est une inférence indicative
+(gabarit 'rtsp://{ip}:554/live/ch0') et DOIT faire l'objet d'une validation et approbation explicite
+par l'opérateur avant tout raccordement effectif.
 """
 
 import socket
@@ -51,7 +58,13 @@ class ONVIFCandidate:
     firmware: str = "N/A"
     rtsp_uri: Optional[str] = None
     sanitized_rtsp_uri: Optional[str] = None
-    profiles: List[str] = field(default_factory=list)
+    profiles: List[str] = field(default_factory=lambda: ["WS_DISCOVERY_SUPPORTED"])
+    capabilities: Dict[str, str] = field(default_factory=lambda: {
+        "ws_discovery": "WS_DISCOVERY_SUPPORTED",
+        "soap_media": "SOAP_MEDIA_NOT_IMPLEMENTED",
+        "profile_s": "PROFILE_S_NOT_VERIFIED",
+        "profile_t": "PROFILE_T_NOT_VERIFIED"
+    })
     status: str = "DISCOVERED_PENDING_APPROVAL"  # "DISCOVERED_PENDING_APPROVAL", "APPROVED", "REJECTED"
 
 
@@ -164,7 +177,13 @@ class ONVIFDiscoveryService:
             model=model,
             rtsp_uri=rtsp_uri,
             sanitized_rtsp_uri=sanitize_uri(rtsp_uri),
-            profiles=["Profile S (Simulated/Candidate)"],
+            profiles=["WS_DISCOVERY_SUPPORTED"],
+            capabilities={
+                "ws_discovery": "WS_DISCOVERY_SUPPORTED",
+                "soap_media": "SOAP_MEDIA_NOT_IMPLEMENTED",
+                "profile_s": "PROFILE_S_NOT_VERIFIED",
+                "profile_t": "PROFILE_T_NOT_VERIFIED"
+            },
             status="DISCOVERED_PENDING_APPROVAL"
         )
 
@@ -179,6 +198,7 @@ class ONVIFDiscoveryService:
                 "model": c.model,
                 "sanitized_rtsp_uri": c.sanitized_rtsp_uri,
                 "profiles": c.profiles,
+                "capabilities": c.capabilities,
                 "discovered_at": c.discovered_at,
                 "status": c.status
             }

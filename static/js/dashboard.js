@@ -1,5 +1,16 @@
 // SMART SECURITY MONITOR — Console Professionnelle JavaScript
 
+// Fonction universelle d'échappement HTML pour prévenir les failles XSS (DOM Injection)
+function escapeHtml(str) {
+    if (str === null || str === undefined) return "";
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
 let currentStatus = null;
 let pollTimer = null;
 let isAudioPlaying = false;
@@ -431,33 +442,39 @@ function renderDevices(devices) {
         const cardId = `cam_card_${dev.id}`;
         const imgId = `cam_img_${dev.id}`;
 
+        const safeDevId = encodeURIComponent(dev.id || '');
+        const safeDevName = escapeHtml(dev.name);
+        const safeDevIp = escapeHtml(dev.ip || '');
+        const safeDevPort = encodeURIComponent(dev.port || '');
+        const safeDevNameParam = encodeURIComponent(dev.name || '');
+
         html += `
             <div id="${cardId}" class="bg-cardBg border border-cardBorder rounded-xl overflow-hidden shadow-lg camera-card flex flex-col">
                 <!-- En-tête de la caméra -->
                 <div class="p-3 bg-slate-900/80 border-b border-cardBorder flex items-center justify-between">
                     <div class="flex items-center space-x-2">
                         <i class="fa-solid fa-mobile-screen text-blue-400 text-sm"></i>
-                        <span class="font-bold text-xs text-slate-100">${dev.name}</span>
-                        <span class="text-[11px] text-slate-400">(${dev.ip}:${dev.port})</span>
+                        <span class="font-bold text-xs text-slate-100">${safeDevName}</span>
+                        <span class="text-[11px] text-slate-400">(${safeDevIp}:${safeDevPort})</span>
                     </div>
                     <div class="flex items-center space-x-2">
                         <span class="text-[10px] px-2 py-0.5 rounded font-semibold flex items-center space-x-1 ${statusBadgeClass}">
                             <i class="fa-solid ${statusIcon} text-[9px]"></i>
                             <span>${overall}</span>
                         </span>
-                        <button onclick="openZonesModal('${dev.id}', '${dev.name}')" class="text-slate-400 hover:text-emerald-400 text-xs p-1" title="Configurer les Zones de Surveillance (ROI)">
+                        <button onclick="openZonesModal('${safeDevId}', decodeURIComponent('${safeDevNameParam}'))" class="text-slate-400 hover:text-emerald-400 text-xs p-1" title="Configurer les Zones de Surveillance (ROI)">
                             <i class="fa-solid fa-draw-polygon"></i>
                         </button>
-                        <button onclick="openDiagnosticModal('${dev.id}', '${dev.name}')" class="text-slate-400 hover:text-cyan-400 text-xs p-1" title="Diagnostic technique approfondi">
+                        <button onclick="openDiagnosticModal('${safeDevId}', decodeURIComponent('${safeDevNameParam}'))" class="text-slate-400 hover:text-cyan-400 text-xs p-1" title="Diagnostic technique approfondi">
                             <i class="fa-solid fa-stethoscope"></i>
                         </button>
                         <button onclick="toggleFullscreen('${cardId}')" class="text-slate-400 hover:text-cyan-400 text-xs p-1" title="Plein écran">
                             <i class="fa-solid fa-expand"></i>
                         </button>
-                        <button onclick="refreshStream('${dev.id}')" class="text-slate-400 hover:text-blue-400 text-xs p-1" title="Rafraîchir le flux">
+                        <button onclick="refreshStream('${safeDevId}')" class="text-slate-400 hover:text-blue-400 text-xs p-1" title="Rafraîchir le flux">
                             <i class="fa-solid fa-rotate-right"></i>
                         </button>
-                        <button onclick="deleteDevice('${dev.id}', '${dev.name}')" class="text-slate-400 hover:text-red-400 text-xs p-1" title="Supprimer cet appareil">
+                        <button onclick="deleteDevice('${safeDevId}', decodeURIComponent('${safeDevNameParam}'))" class="text-slate-400 hover:text-red-400 text-xs p-1" title="Supprimer cet appareil">
                             <i class="fa-solid fa-trash-can"></i>
                         </button>
                     </div>
@@ -648,44 +665,58 @@ function renderAlertsTable(alerts) {
         if (a.severity === "CRITIQUE") sevClass = "text-red-400 font-bold";
         else if (a.severity === "AVERTISSEMENT") sevClass = "text-amber-400 font-bold";
 
+        // Badges sécurisés
+        const safeId = encodeURIComponent(a.id || '');
+        const safeType = escapeHtml(a.type);
+        const safeDatetime = escapeHtml(a.datetime);
+        const safeDeviceName = escapeHtml(a.device_name);
+        const safeDeviceIp = escapeHtml(a.device_ip || '');
+        const safeSeverity = escapeHtml(a.severity || 'AVERTISSEMENT');
+        const safeCategory = escapeHtml(a.category || '');
+        const safeDetails = escapeHtml(a.details || '');
+        const safeStatus = escapeHtml(a.status || 'N/D');
+        const safeScreenshot = encodeURI(a.screenshot_path || '');
+        const safeRecording = encodeURI(a.recording_path || '');
+        const safeTitleParam = encodeURIComponent(`${a.type || ''} — ${a.datetime || ''}`);
+
         const screenshotBtn = a.screenshot_path ? `
-            <button onclick="openImageModal('/${a.screenshot_path}', '${a.type} — ${a.datetime}')" class="text-blue-400 hover:text-blue-300 transition text-sm" title="Voir la capture photo">
+            <button onclick="openImageModal('/${safeScreenshot}', decodeURIComponent('${safeTitleParam}'))" class="text-blue-400 hover:text-blue-300 transition text-sm" title="Voir la capture photo">
                 <i class="fa-solid fa-image"></i>
             </button>
         ` : `<span class="text-slate-600">-</span>`;
 
         const videoBtn = a.recording_path ? `
-            <button onclick="openVideoModal('/${a.recording_path}', '${a.type} — ${a.datetime}')" class="text-emerald-400 hover:text-emerald-300 transition text-sm" title="Lire la vidéo (3s avant / 5s après)">
+            <button onclick="openVideoModal('/${safeRecording}', decodeURIComponent('${safeTitleParam}'))" class="text-emerald-400 hover:text-emerald-300 transition text-sm" title="Lire la vidéo (3s avant / 5s après)">
                 <i class="fa-solid fa-circle-play"></i>
             </button>
-        ` : `<span class="text-[10px] text-slate-500">${a.status || 'N/D'}</span>`;
+        ` : `<span class="text-[10px] text-slate-500">${safeStatus}</span>`;
 
         return `
             <tr class="hover:bg-slate-800/50 transition">
-                <td class="px-4 py-2.5 font-mono text-[11px] text-slate-300">${a.datetime}</td>
+                <td class="px-4 py-2.5 font-mono text-[11px] text-slate-300">${safeDatetime}</td>
                 <td class="px-4 py-2.5 font-semibold text-slate-200">
-                    <div>${a.device_name}</div>
-                    <div class="text-[10px] text-slate-500 font-mono">${a.device_ip || ''}</div>
+                    <div>${safeDeviceName}</div>
+                    <div class="text-[10px] text-slate-500 font-mono">${safeDeviceIp}</div>
                 </td>
                 <td class="px-4 py-2.5">
-                    <span class="font-bold text-slate-100">${a.type}</span>
-                    <span class="text-[10px] block ${sevClass}">[${a.severity || 'AVERTISSEMENT'}]</span>
+                    <span class="font-bold text-slate-100">${safeType}</span>
+                    <span class="text-[10px] block ${sevClass}">[${safeSeverity}]</span>
                 </td>
                 <td class="px-4 py-2.5">
-                    <span class="text-[10px] px-2 py-0.5 rounded border font-semibold ${catClass}">${a.category}</span>
+                    <span class="text-[10px] px-2 py-0.5 rounded border font-semibold ${catClass}">${safeCategory}</span>
                 </td>
-                <td class="px-4 py-2.5 text-xs text-slate-400 max-w-xs truncate">${a.details || ''}</td>
+                <td class="px-4 py-2.5 text-xs text-slate-400 max-w-xs truncate">${safeDetails}</td>
                 <td class="px-4 py-2.5 text-center">${screenshotBtn}</td>
                 <td class="px-4 py-2.5 text-center">${videoBtn}</td>
                 <td class="px-4 py-2.5 text-center">
                     <div class="flex items-center justify-center space-x-2">
-                        <button onclick="openIntegrityModal('${a.id}')" class="text-slate-400 hover:text-emerald-400 text-xs transition" title="Certificat d'intégrité SHA-256">
+                        <button onclick="openIntegrityModal('${safeId}')" class="text-slate-400 hover:text-emerald-400 text-xs transition" title="Certificat d'intégrité SHA-256">
                             <i class="fa-solid fa-fingerprint"></i>
                         </button>
-                        <a href="/api/reports/incident/${a.id}/pdf" target="_blank" class="text-slate-400 hover:text-purple-400 text-xs transition" title="Télécharger le Rapport PDF">
+                        <a href="/api/reports/incident/${safeId}/pdf" target="_blank" class="text-slate-400 hover:text-purple-400 text-xs transition" title="Télécharger le Rapport PDF">
                             <i class="fa-solid fa-file-pdf"></i>
                         </a>
-                        <button onclick="deleteAlert('${a.id}')" class="text-slate-500 hover:text-red-400 text-xs transition" title="Supprimer cette preuve">
+                        <button onclick="deleteAlert('${safeId}')" class="text-slate-500 hover:text-red-400 text-xs transition" title="Supprimer cette preuve">
                             <i class="fa-solid fa-trash"></i>
                         </button>
                     </div>
@@ -972,20 +1003,24 @@ function renderZones(zones) {
         return;
     }
 
-    container.innerHTML = zones.map(z => `
+    container.innerHTML = zones.map(z => {
+        const safeZoneId = encodeURIComponent(z.id || '');
+        const safeZoneName = escapeHtml(z.name);
+        return `
         <div class="flex items-center justify-between bg-slate-800/80 p-2.5 rounded-lg border border-slate-700/60 text-xs">
             <div class="flex items-center space-x-2.5">
-                <input type="checkbox" ${z.enabled ? 'checked' : ''} onchange="toggleZoneEnabled('${z.id}', this.checked)" class="rounded bg-slate-900 border-slate-700 text-emerald-500 cursor-pointer">
+                <input type="checkbox" ${z.enabled ? 'checked' : ''} onchange="toggleZoneEnabled('${safeZoneId}', this.checked)" class="rounded bg-slate-900 border-slate-700 text-emerald-500 cursor-pointer">
                 <div>
-                    <span class="font-bold ${z.enabled ? 'text-slate-200' : 'text-slate-500'}">${z.name}</span>
+                    <span class="font-bold ${z.enabled ? 'text-slate-200' : 'text-slate-500'}">${safeZoneName}</span>
                     <span class="text-[10px] text-slate-400 block font-mono">X: ${Math.round(z.x*100)}% | Y: ${Math.round(z.y*100)}% | L: ${Math.round(z.w*100)}% | H: ${Math.round(z.h*100)}%</span>
                 </div>
             </div>
-            <button onclick="deleteZone('${z.id}')" class="text-slate-500 hover:text-red-400 text-xs p-1 transition" title="Supprimer la zone">
+            <button onclick="deleteZone('${safeZoneId}')" class="text-slate-500 hover:text-red-400 text-xs p-1 transition" title="Supprimer la zone">
                 <i class="fa-solid fa-trash"></i>
             </button>
         </div>
-    `).join("");
+        `;
+    }).join("");
 }
 
 async function submitAddZone(e) {
@@ -1133,19 +1168,26 @@ function renderNotifications(data) {
         if (n.level === "CRITICAL") levelColor = "text-red-400 bg-red-950/40 border-red-800/40";
         else if (n.level === "HIGH" || n.level === "WARNING") levelColor = "text-amber-400 bg-amber-950/40 border-amber-800/40";
 
+        const safeLevel = escapeHtml(n.level);
+        const safeTitle = escapeHtml(n.title);
+        const safeMessage = escapeHtml(n.message);
+        const safeDatetime = escapeHtml(n.datetime);
+        const safeDeviceName = escapeHtml(n.device_name || '');
+        const safeNotifId = encodeURIComponent(n.id || '');
+
         return `
             <div class="p-2.5 hover:bg-slate-800/60 transition ${n.read ? 'opacity-60' : 'bg-slate-800/30'} flex items-start justify-between gap-2">
                 <div class="flex-1 space-y-0.5">
                     <div class="flex items-center gap-1.5">
-                        <span class="text-[9px] px-1.5 py-0.2 rounded border font-bold uppercase ${levelColor}">${n.level}</span>
-                        <span class="font-bold text-slate-200 text-xs truncate">${n.title}</span>
+                        <span class="text-[9px] px-1.5 py-0.2 rounded border font-bold uppercase ${levelColor}">${safeLevel}</span>
+                        <span class="font-bold text-slate-200 text-xs truncate">${safeTitle}</span>
                     </div>
-                    <p class="text-[11px] text-slate-300">${n.message}</p>
-                    <span class="text-[9px] text-slate-500 block font-mono">${n.datetime} • ${n.device_name}</span>
+                    <p class="text-[11px] text-slate-300">${safeMessage}</p>
+                    <span class="text-[9px] text-slate-500 block font-mono">${safeDatetime} • ${safeDeviceName}</span>
                 </div>
                 <div class="flex flex-col items-end space-y-1">
-                    ${!n.read ? `<button onclick="markNotificationRead('${n.id}')" class="text-[10px] text-cyan-400 hover:underline" title="Marquer lu"><i class="fa-solid fa-check"></i></button>` : ''}
-                    <button onclick="deleteNotification('${n.id}')" class="text-[10px] text-slate-500 hover:text-red-400" title="Supprimer"><i class="fa-solid fa-xmark"></i></button>
+                    ${!n.read ? `<button onclick="markNotificationRead('${safeNotifId}')" class="text-[10px] text-cyan-400 hover:underline" title="Marquer lu"><i class="fa-solid fa-check"></i></button>` : ''}
+                    <button onclick="deleteNotification('${safeNotifId}')" class="text-[10px] text-slate-500 hover:text-red-400" title="Supprimer"><i class="fa-solid fa-xmark"></i></button>
                 </div>
             </div>
         `;
@@ -1188,7 +1230,7 @@ async function openDiagnosticModal(deviceId, deviceName) {
         const diag = await resp.json();
         renderDiagnostic(diag);
     } catch (e) {
-        container.innerHTML = `<div class="text-red-400 text-center py-4">Erreur réseau : ${e}</div>`;
+        container.innerHTML = `<div class="text-red-400 text-center py-4">Erreur réseau : ${escapeHtml(e)}</div>`;
     }
 }
 
@@ -1217,10 +1259,10 @@ function renderDiagnostic(diag) {
 
         sensorsHtml += `
             <div class="flex items-center justify-between p-2 bg-slate-800/80 rounded border border-slate-700/50 text-[11px]">
-                <span class="font-bold text-slate-300 capitalize">${key}</span>
+                <span class="font-bold text-slate-300 capitalize">${escapeHtml(key)}</span>
                 <div class="flex items-center gap-2">
-                    <span class="font-mono text-slate-200">${s.value !== null ? `${s.value} ${s.unit}` : '--'}</span>
-                    <span class="px-1.5 py-0.5 rounded border text-[9px] font-semibold ${badgeColor}">${s.status}</span>
+                    <span class="font-mono text-slate-200">${s.value !== null ? `${escapeHtml(s.value)} ${escapeHtml(s.unit)}` : '--'}</span>
+                    <span class="px-1.5 py-0.5 rounded border text-[9px] font-semibold ${badgeColor}">${escapeHtml(s.status)}</span>
                 </div>
             </div>
         `;
@@ -1229,11 +1271,11 @@ function renderDiagnostic(diag) {
     container.innerHTML = `
         <div class="flex items-center justify-between p-3 bg-slate-900/80 rounded-lg border border-cardBorder">
             <div>
-                <span class="font-bold text-slate-100 text-sm">${diag.name}</span>
-                <span class="text-slate-400 block font-mono text-[11px]">IP: ${diag.ip}:${diag.port}</span>
+                <span class="font-bold text-slate-100 text-sm">${escapeHtml(diag.name)}</span>
+                <span class="text-slate-400 block font-mono text-[11px]">IP: ${escapeHtml(diag.ip)}:${escapeHtml(diag.port)}</span>
             </div>
             <div class="text-right">
-                <span class="px-2.5 py-1 rounded border font-bold text-xs uppercase ${overallBadge}">${diag.overall_status}</span>
+                <span class="px-2.5 py-1 rounded border font-bold text-xs uppercase ${overallBadge}">${escapeHtml(diag.overall_status)}</span>
                 ${diag.is_silent ? '<span class="block text-[10px] text-red-400 font-bold mt-0.5 animate-pulse"><i class="fa-solid fa-triangle-exclamation"></i> APPAREIL SILENCIEUX (> 8s)</span>' : ''}
             </div>
         </div>
@@ -1887,7 +1929,7 @@ async function executeSemanticSearch() {
         const res = await fetch(`/api/search/semantic?q=${encodeURIComponent(q)}&min_score=0.15`);
         const data = await res.json();
         if (!res.ok) {
-            if (container) container.innerHTML = `<div class="text-red-400 text-center py-2">${data.message || "Erreur de recherche"}</div>`;
+            if (container) container.innerHTML = `<div class="text-red-400 text-center py-2">${escapeHtml(data.message || "Erreur de recherche")}</div>`;
             return;
         }
 
@@ -1901,9 +1943,9 @@ async function executeSemanticSearch() {
             container.innerHTML = results.map(r => `
                 <div class="p-2 bg-slate-900/80 rounded border border-cardBorder flex items-center justify-between">
                     <div>
-                        <span class="font-bold text-slate-200">${r.event_id}</span>
-                        <span class="text-[10px] text-slate-400 block">${r.device_id} &bull; Image #${r.best_frame_index}</span>
-                        <span class="text-[9px] text-cyan-400 font-mono">${(r.labels || []).join(", ")}</span>
+                        <span class="font-bold text-slate-200">${escapeHtml(r.event_id)}</span>
+                        <span class="text-[10px] text-slate-400 block">${escapeHtml(r.device_id)} &bull; Image #${escapeHtml(r.best_frame_index)}</span>
+                        <span class="text-[9px] text-cyan-400 font-mono">${(r.labels || []).map(l => escapeHtml(l)).join(", ")}</span>
                     </div>
                     <div class="text-right">
                         <span class="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-cyan-950 text-cyan-300 border border-cyan-800">
@@ -2040,22 +2082,29 @@ async function loadPrivacyRequests() {
             return;
         }
 
-        container.innerHTML = reqs.map(r => `
+        container.innerHTML = reqs.map(r => {
+            const safeReqId = encodeURIComponent(r.id || '');
+            const safeResId = escapeHtml(r.resource_id);
+            const safeReason = escapeHtml(r.reason);
+            const safeRequester = escapeHtml(r.requester);
+            const safeReqStatus = escapeHtml(r.status);
+            return `
             <div class="p-2 bg-slate-900 rounded border border-cardBorder flex items-center justify-between text-xs">
                 <div>
-                    <span class="font-bold text-slate-200">${r.id}</span>
-                    <span class="text-[10px] text-slate-400 block">${r.resource_id} &bull; ${r.reason}</span>
-                    <span class="text-[9px] text-purple-400">Demandeur : ${r.requester} (${r.approvers?.length || 0}/2)</span>
+                    <span class="font-bold text-slate-200">${safeReqId}</span>
+                    <span class="text-[10px] text-slate-400 block">${safeResId} &bull; ${safeReason}</span>
+                    <span class="text-[9px] text-purple-400">Demandeur : ${safeRequester} (${r.approvers?.length || 0}/2)</span>
                 </div>
                 <div>
                     ${r.status === 'PENDING' ? `
-                        <button onclick="approvePrivacyRequest('${r.id}')" class="bg-purple-800 hover:bg-purple-700 text-white font-bold px-2 py-1 rounded text-[10px] transition">
+                        <button onclick="approvePrivacyRequest('${safeReqId}')" class="bg-purple-800 hover:bg-purple-700 text-white font-bold px-2 py-1 rounded text-[10px] transition">
                             Approuver (Admin)
                         </button>
-                    ` : `<span class="text-emerald-400 font-bold text-[10px]">${r.status}</span>`}
+                    ` : `<span class="text-emerald-400 font-bold text-[10px]">${safeReqStatus}</span>`}
                 </div>
             </div>
-        `).join("");
+            `;
+        }).join("");
     } catch (e) {
         console.error("Erreur chargement demandes privacy :", e);
     }

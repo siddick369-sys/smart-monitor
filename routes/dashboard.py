@@ -13,14 +13,14 @@ def create_dashboard_blueprint(coordinator):
         return render_template('dashboard.html')
 
     @bp.route('/api/status', methods=['GET'])
+    @login_required
+    @roles_required("ADMIN", "OPERATOR", "AUDITOR")
     def status():
         """Retourne l'état complet du système pour l'actualisation temps réel."""
         try:
             return jsonify(coordinator.get_system_status())
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            return jsonify({"status": "error", "message": str(e)}), 500
+        except Exception:
+            return jsonify({"status": "error", "message": "Erreur interne lors de la lecture du statut."}), 500
 
     @bp.route('/api/settings', methods=['POST'])
     @login_required

@@ -1,6 +1,11 @@
 """
-Services de découverte réseau mDNS et SSDP pour caméras IP.
+Services de découverte réseau SSDP et intégration WS-Discovery pour caméras IP.
 Architecture NVR universelle PRO-13.
+
+NOTE PROTOCOLE (A1-005) :
+Le protocole mDNS / Zeroconf n'est PAS implémenté dans cette version (NOT_IMPLEMENTED).
+Seuls les protocoles SSDP (UPnP) et ONVIF WS-Discovery sont pris en charge.
+Tout équipement découvert est consigné à l'état DISCOVERED_PENDING_APPROVAL (zéro auto-enrôlement).
 """
 
 import socket
@@ -28,9 +33,9 @@ SSDP_SEARCH_MSG = (
 
 @dataclass
 class DiscoveredDeviceCandidate:
-    """Représentation d'un équipement découvert par mDNS ou SSDP."""
+    """Représentation d'un équipement découvert par WS-Discovery ou SSDP (mDNS non implémenté)."""
     candidate_id: str
-    discovery_protocol: str  # "SSDP", "MDNS", "WS_DISCOVERY"
+    discovery_protocol: str  # "SSDP", "WS_DISCOVERY" (mDNS: "NOT_IMPLEMENTED")
     ip: str
     port: int
     name: str

@@ -1,0 +1,76 @@
+# =============================================================================
+# SMART SECURITY MONITOR — ARCHITECTURE DE DÉPLOIEMENT ISOLÉ DU WORKER NVR
+# Programme PRO-13 — Lot A.4 : Confinement Egress et Isolation Réseau
+# =============================================================================
+# Ce fichier définit un service worker FFmpeg hautement confiné et découplé.
+# Conforme aux exigences de sécurité :
+# 1. Utilisateur non-privilégié dédié (UID:GID = 10001:10001).
+# 2. Abandon de toutes les capacités Linux (cap_drop: ALL).
+# 3. Interdiction d'élévation de privilèges (no-new-privileges: true).
+# 4. Système de fichiers racine en lecture seule (read_only: true).
+# 5. Pas de réseau hôte (network_mode: host proscrit), réseau bridge isolé dédié.
+# 6. Plafonnement strict des ressources (CPU: 1.0, RAM: 512 Mo, PIDs: 50).
+# 7. Confinement d'egress Deny-by-Default (règles iptables dans le conteneur ou pare-feu réseau).
+# =============================================================================
+
+version: '3.8'
+
+services:
+  ssm-nvr-isolated-worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.nvr-worker
+    image: ssm-nvr-worker:pro13-a4
+    container_name: ssm_nvr_worker_isolated
+    restart: unless-stopped
+
+    # Sécurité des privilèges et utilisateur dédié
+    user: "10001:10001"
+    privileged: false
+    security_opt:
+      - no-new-privileges:true
+
+    # Minimisation des capacités Linux du noyau
+    cap_drop:
+      - ALL
+
+    # Système de fichiers en lecture seule avec tampons éphémères en mémoire
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      - /run:rw,noexec,nosuid,size=16m
+
+    # Plafonnement des ressources de calcul et anti-fork bomb
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+          pids: 50
+        reservations:
+          cpus: '0.2'
+          memory: 128M
+
+    # Variables d'environnement pour la configuration NVR (ne déclare PAS le confinement OS comme actif)
+    environment:
+      - APP_ENV=production
+      - IS_PRODUCTION=true
+      - REQUIRE_OS_EGRESS_CONFINEMENT=true
+      - ALLOWED_CAMERA_IPS=192.168.1.50/32,192.168.1.51/32
+
+    # Réseau dédié avec passerelle isolée
+    # IMPORTANT (PRO-13 A.4.2) : internal: false nécessite impérativement l'application de
+    # scripts/setup_docker_egress_host.sh sur l'hôte Docker (chaîne DOCKER-USER / nftables).
+    networks:
+      ssm-nvr-isolated-net:
+        ipv4_address: 172.28.10.10
+
+networks:
+  ssm-nvr-isolated-net:
+    driver: bridge
+    internal: false
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.28.10.0/24
+          gateway: 172.28.10.1

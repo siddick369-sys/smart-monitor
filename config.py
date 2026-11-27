@@ -21,7 +21,7 @@ DEVICES_FILE = os.path.join(LOGS_DIR, "devices.json")
 ALERTS_FILE = os.path.join(LOGS_DIR, "alerts.json")
 SETTINGS_FILE = os.path.join(LOGS_DIR, "settings.json")
 APP_LOG_FILE = os.path.join(LOGS_DIR, "security_monitor.log")
-DB_PATH = os.path.join(STORAGE_DIR, "security_monitor.db")
+DB_PATH = os.environ.get("SSM_DB_PATH") or os.path.join(STORAGE_DIR, "security_monitor.db")
 BACKUPS_DIR = os.path.join(STORAGE_DIR, "backups")
 MODELS_DIR = os.path.join(STORAGE_DIR, "models")
 

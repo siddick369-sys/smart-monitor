@@ -1,4 +1,5 @@
 import time
+import uuid
 import threading
 from collections import deque
 from typing import List, Optional, Dict
@@ -12,6 +13,7 @@ class NotificationManager:
         self.max_notifications = max_notifications
         self.dedup_window_seconds = dedup_window_seconds
         self._lock = threading.RLock()
+        self._seq_counter = 0
         self._notifications: deque = deque(maxlen=max_notifications)
         self._last_dedup_keys: Dict[str, float] = {}
 
@@ -43,7 +45,8 @@ class NotificationManager:
                 return None
             self._last_dedup_keys[dedup_key] = now
 
-            notif_id = f"notif_{int(now*1000)}"
+            self._seq_counter += 1
+            notif_id = f"notif_{int(now*1000)}_{self._seq_counter}_{uuid.uuid4().hex[:6]}"
             notif = {
                 "id": notif_id,
                 "timestamp": now,

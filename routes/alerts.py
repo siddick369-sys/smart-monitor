@@ -12,30 +12,112 @@ def create_alerts_blueprint(coordinator):
     bp = Blueprint('alerts', __name__)
 
     @bp.route('/api/alerts', methods=['GET'])
+    @login_required
+    @roles_required("ADMIN", "OPERATOR", "AUDITOR")
     def list_alerts():
         device_id = request.args.get('device_id')
         event_type = request.args.get('type')
         period = request.args.get('period')
         query = request.args.get('query')
+        limit = request.args.get('limit')
+        offset = request.args.get('offset')
+
+        # Validation de sécurité sur l'identifiant d'appareil (anti-traversée et anti-injection)
+        if device_id:
+            if not re.match(r'^[a-zA-Z0-9_-]+$', device_id):
+                return jsonify({"status": "error", "message": "Identifiant d'appareil invalide."}), 400
+            if hasattr(coordinator, "device_store") and coordinator.device_store:
+                if not coordinator.device_store.get_device(device_id):
+                    return jsonify({"status": "error", "message": "Appareil introuvable ou non autorisé."}), 404
+
+        # Validation des caractères de contrôle dans les paramètres textuels
+        if event_type and any(c in event_type for c in ('\x00', '\r', '\n')):
+            return jsonify({"status": "error", "message": "Paramètre type invalide."}), 400
+        if query and any(c in query for c in ('\x00', '\r', '\n')):
+            return jsonify({"status": "error", "message": "Paramètre query invalide."}), 400
+
+        # Validation du filtre temporel
+        if period and period not in ("today", "24h", "7d", "all"):
+            return jsonify({"status": "error", "message": "Paramètre period invalide. Valeurs acceptées : today, 24h, 7d, all."}), 400
+
+        # Validation stricte de la pagination
+        parsed_limit = None
+        if limit is not None:
+            try:
+                parsed_limit = int(limit)
+                if parsed_limit < 0:
+                    return jsonify({"status": "error", "message": "Paramètre limit négatif invalide."}), 400
+                if parsed_limit > 1000:
+                    parsed_limit = 1000
+            except (ValueError, TypeError):
+                return jsonify({"status": "error", "message": "Paramètre limit non entier."}), 400
+
+        parsed_offset = 0
+        if offset is not None:
+            try:
+                parsed_offset = int(offset)
+                if parsed_offset < 0:
+                    return jsonify({"status": "error", "message": "Paramètre offset négatif invalide."}), 400
+            except (ValueError, TypeError):
+                return jsonify({"status": "error", "message": "Paramètre offset non entier."}), 400
 
         if any([device_id, event_type, period, query]):
             alerts = coordinator.recording_manager.filter_alerts(
                 device_id=device_id,
                 event_type=event_type,
-                period=period,
+                period=period if period != "all" else None,
                 query=query
             )
         else:
             alerts = coordinator.recording_manager.get_all_alerts()
+
+        # Application de la pagination sécurisée
+        if parsed_offset > 0:
+            alerts = alerts[parsed_offset:]
+        if parsed_limit is not None:
+            alerts = alerts[:parsed_limit]
             
         return jsonify(alerts)
 
     @bp.route('/api/alerts/export/csv', methods=['GET'])
+    @login_required
+    @roles_required("ADMIN", "OPERATOR", "AUDITOR")
     def export_csv():
-        csv_data = coordinator.recording_manager.export_csv()
+        device_id = request.args.get('device_id')
+        event_type = request.args.get('type')
+        period = request.args.get('period')
+        query = request.args.get('query')
+
+        # Validation de sécurité sur l'identifiant d'appareil
+        if device_id:
+            if not re.match(r'^[a-zA-Z0-9_-]+$', device_id):
+                return jsonify({"status": "error", "message": "Identifiant d'appareil invalide."}), 400
+            if hasattr(coordinator, "device_store") and coordinator.device_store:
+                if not coordinator.device_store.get_device(device_id):
+                    return jsonify({"status": "error", "message": "Appareil introuvable ou non autorisé."}), 404
+
+        if event_type and any(c in event_type for c in ('\x00', '\r', '\n')):
+            return jsonify({"status": "error", "message": "Paramètre type invalide."}), 400
+        if query and any(c in query for c in ('\x00', '\r', '\n')):
+            return jsonify({"status": "error", "message": "Paramètre query invalide."}), 400
+
+        if period and period not in ("today", "24h", "7d", "all"):
+            return jsonify({"status": "error", "message": "Paramètre period invalide. Valeurs acceptées : today, 24h, 7d, all."}), 400
+
+        if any([device_id, event_type, period, query]):
+            alerts = coordinator.recording_manager.filter_alerts(
+                device_id=device_id,
+                event_type=event_type,
+                period=period if period != "all" else None,
+                query=query
+            )
+        else:
+            alerts = coordinator.recording_manager.get_all_alerts()
+
+        csv_data = coordinator.recording_manager.export_csv(alerts=alerts)
         return Response(
             csv_data,
-            mimetype="text/csv",
+            mimetype="text/csv; charset=utf-8",
             headers={"Content-Disposition": "attachment; filename=journal_incidents_export.csv"}
         )
 
@@ -89,6 +171,8 @@ def create_alerts_blueprint(coordinator):
         }})
 
     @bp.route('/api/storage/stats', methods=['GET'])
+    @login_required
+    @roles_required("ADMIN", "OPERATOR", "AUDITOR")
     def storage_stats():
         return jsonify(coordinator.recording_manager.get_storage_stats())
 
@@ -117,16 +201,25 @@ def create_alerts_blueprint(coordinator):
     # ==========================================
 
     @bp.route('/api/statistics', methods=['GET'])
+    @login_required
+    @roles_required("ADMIN", "OPERATOR", "AUDITOR")
     def statistics():
         return jsonify(coordinator.recording_manager.get_statistics())
 
     @bp.route('/api/timeline', methods=['GET'])
+    @login_required
+    @roles_required("ADMIN", "OPERATOR", "AUDITOR")
     def timeline():
         device_id = request.args.get('device_id')
         event_type = request.args.get('type')
         period = request.args.get('period')
         query = request.args.get('query')
-        limit = int(request.args.get('limit', 100))
+        if device_id and not re.match(r'^[a-zA-Z0-9_-]+$', device_id):
+            return jsonify({"status": "error", "message": "Identifiant d'appareil invalide."}), 400
+        try:
+            limit = max(1, min(1000, int(request.args.get('limit', 100))))
+        except (ValueError, TypeError):
+            return jsonify({"status": "error", "message": "Paramètre limit invalide."}), 400
         return jsonify(coordinator.recording_manager.get_timeline(
             device_id=device_id,
             event_type=event_type,
@@ -183,11 +276,17 @@ def create_alerts_blueprint(coordinator):
     # ==========================================
 
     @bp.route('/api/diagnostics', methods=['GET'])
+    @login_required
+    @roles_required("ADMIN", "OPERATOR", "AUDITOR")
     def all_diagnostics():
         return jsonify(coordinator.diagnostic_manager.run_all_diagnostics())
 
     @bp.route('/api/devices/<device_id>/diagnostics', methods=['GET'])
+    @login_required
+    @roles_required("ADMIN", "OPERATOR", "AUDITOR")
     def device_diagnostic(device_id):
+        if not device_id or not re.match(r'^[a-zA-Z0-9_-]+$', device_id):
+            return jsonify({"status": "error", "message": "Identifiant d'appareil invalide."}), 400
         diag = coordinator.diagnostic_manager.run_device_diagnostic(device_id)
         if not diag:
             return jsonify({"status": "error", "message": "Appareil introuvable pour le diagnostic."}), 404
@@ -198,7 +297,11 @@ def create_alerts_blueprint(coordinator):
     # ==========================================
 
     @bp.route('/api/reports/incident/<alert_id>/pdf', methods=['GET'])
+    @login_required
+    @roles_required("ADMIN", "OPERATOR", "AUDITOR")
     def export_incident_pdf(alert_id):
+        if not alert_id or not re.match(r'^[a-zA-Z0-9_-]+$', alert_id):
+            abort(400, description="Identifiant d'alerte invalide.")
         alerts = coordinator.recording_manager.get_all_alerts()
         alert = next((a for a in alerts if a["id"] == alert_id), None)
         if not alert:
@@ -213,10 +316,16 @@ def create_alerts_blueprint(coordinator):
         )
 
     @bp.route('/api/reports/summary/pdf', methods=['GET'])
+    @login_required
+    @roles_required("ADMIN", "OPERATOR", "AUDITOR")
     def export_summary_pdf():
         period = request.args.get('period', 'all')
         device_id = request.args.get('device_id')
         event_type = request.args.get('type')
+        if device_id and not re.match(r'^[a-zA-Z0-9_-]+$', device_id):
+            abort(400, description="Identifiant d'appareil invalide.")
+        if period not in ("today", "24h", "7d", "all"):
+            abort(400, description="Période invalide.")
 
         period_labels = {
             "today": "Aujourd'hui",
@@ -247,24 +356,32 @@ def create_alerts_blueprint(coordinator):
     # ==========================================
 
     @bp.route('/storage/screenshots/<path:filename>')
+    @login_required
+    @roles_required("ADMIN", "OPERATOR", "AUDITOR")
     def serve_screenshot(filename):
-        safe_path = os.path.basename(filename).strip()
-        if not safe_path or safe_path in [".", ".."] or "\x00" in safe_path:
+        if not filename or ".." in filename or "/" in filename or "\\" in filename or "\x00" in filename:
             abort(400, description="Nom de fichier invalide.")
-        target = os.path.abspath(os.path.join(config.SCREENSHOTS_DIR, safe_path))
-        base = os.path.abspath(config.SCREENSHOTS_DIR)
-        if not target.startswith(base) or not os.path.isfile(target):
+        safe_path = os.path.basename(filename).strip()
+        if not safe_path or safe_path in [".", ".."]:
+            abort(400, description="Nom de fichier invalide.")
+        base = os.path.realpath(os.path.abspath(config.SCREENSHOTS_DIR))
+        target = os.path.realpath(os.path.abspath(os.path.join(base, safe_path)))
+        if not target.startswith(base + os.sep) or not os.path.isfile(target):
             abort(404, description="Preuve photo introuvable.")
         return send_from_directory(config.SCREENSHOTS_DIR, safe_path)
 
     @bp.route('/storage/recordings/<path:filename>')
+    @login_required
+    @roles_required("ADMIN", "OPERATOR", "AUDITOR")
     def serve_recording(filename):
-        safe_path = os.path.basename(filename).strip()
-        if not safe_path or safe_path in [".", ".."] or "\x00" in safe_path:
+        if not filename or ".." in filename or "/" in filename or "\\" in filename or "\x00" in filename:
             abort(400, description="Nom de fichier invalide.")
-        target = os.path.abspath(os.path.join(config.RECORDINGS_DIR, safe_path))
-        base = os.path.abspath(config.RECORDINGS_DIR)
-        if not target.startswith(base) or not os.path.isfile(target):
+        safe_path = os.path.basename(filename).strip()
+        if not safe_path or safe_path in [".", ".."]:
+            abort(400, description="Nom de fichier invalide.")
+        base = os.path.realpath(os.path.abspath(config.RECORDINGS_DIR))
+        target = os.path.realpath(os.path.abspath(os.path.join(base, safe_path)))
+        if not target.startswith(base + os.sep) or not os.path.isfile(target):
             abort(404, description="Preuve vidéo introuvable.")
         return send_from_directory(config.RECORDINGS_DIR, safe_path)
 
@@ -272,12 +389,16 @@ def create_alerts_blueprint(coordinator):
     # AMÉLIORATION N°2 : INTÉGRITÉ CRYPTOGRAPHIQUE
     # ==========================================
     @bp.route('/api/integrity/verify/<proof_id>', methods=['GET'])
+    @login_required
+    @roles_required("ADMIN", "OPERATOR", "AUDITOR")
     def verify_proof_integrity(proof_id):
         safe_id = re.sub(r'[^a-zA-Z0-9_-]', '', proof_id)
         result = coordinator.integrity_manager.verify_evidence(safe_id)
         return jsonify(result)
 
     @bp.route('/api/alerts/<alert_id>/integrity', methods=['GET'])
+    @login_required
+    @roles_required("ADMIN", "OPERATOR", "AUDITOR")
     def verify_alert_integrity(alert_id):
         safe_id = re.sub(r'[^a-zA-Z0-9_-]', '', alert_id)
         results = coordinator.integrity_manager.verify_alert_evidences(safe_id)
@@ -311,6 +432,8 @@ def create_alerts_blueprint(coordinator):
     # AMÉLIORATION N°3 : NOTIFICATIONS TELEGRAM
     # ==========================================
     @bp.route('/api/telegram/status', methods=['GET'])
+    @login_required
+    @roles_required("ADMIN", "OPERATOR", "AUDITOR")
     def telegram_status():
         return jsonify(coordinator.telegram_notifier.get_status())
 
@@ -328,6 +451,8 @@ def create_alerts_blueprint(coordinator):
     # AMÉLIORATION N°1 : IA QWEN VISION XKiro FREE TIER
     # ==========================================
     @bp.route('/api/qwen_vision/status', methods=['GET'])
+    @login_required
+    @roles_required("ADMIN", "OPERATOR", "AUDITOR")
     def qwen_vision_status():
         return jsonify(coordinator.qwen_vision_manager.get_status())
 
@@ -346,6 +471,8 @@ def create_alerts_blueprint(coordinator):
     # AMÉLIORATION N°5 : MIGRATION & PERSISTANCE SQLITE
     # ==========================================
     @bp.route('/api/database/status', methods=['GET'])
+    @login_required
+    @roles_required("ADMIN", "OPERATOR", "AUDITOR")
     def database_status():
         try:
             with get_db_session() as db:

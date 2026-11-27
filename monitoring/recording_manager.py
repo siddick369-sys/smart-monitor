@@ -2,6 +2,7 @@ import os
 import io
 import csv
 import json
+import re
 import threading
 import time
 import shutil
@@ -451,9 +452,10 @@ class RecordingManager:
             "screenshots_count": scr_count
         }
 
-    def export_csv(self) -> str:
-        """Génère un export CSV structuré de l'historique complet des incidents."""
+    def export_csv(self, alerts: Optional[List[dict]] = None) -> str:
+        """Génère un export CSV structuré de l'historique des incidents avec neutralisation des injections de formules."""
         with self._lock:
+            target_alerts = alerts if alerts is not None else self.alerts
             output = io.StringIO()
             fieldnames = [
                 "id", "datetime", "device_name", "device_id", "device_ip",
@@ -462,8 +464,28 @@ class RecordingManager:
             ]
             writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction='ignore', delimiter=';')
             writer.writeheader()
-            for a in self.alerts:
-                writer.writerow(a)
+            for a in target_alerts:
+                sanitized_row = {}
+                for k in fieldnames:
+                    v = a.get(k)
+                    if isinstance(v, str):
+                        # Neutralisation CSV formula injection: =, +, -, @, \t, \r, \n
+                        stripped = v.lstrip(' \t\r\n')
+                        starts_dangerous = (len(v) > 0 and v[0] in ('=', '+', '-', '@', '\t', '\r', '\n')) or (len(stripped) > 0 and stripped[0] in ('=', '+', '-', '@'))
+                        if starts_dangerous:
+                            # Préserver les valeurs purement numériques dans les colonnes de mesure (ex: "-5.0", "+3")
+                            is_pure_num = False
+                            if k in ("measured_value", "threshold") and re.match(r'^[+-]?\d+(\.\d+)?$', v.strip()):
+                                is_pure_num = True
+                            if not is_pure_num:
+                                sanitized_row[k] = "'" + v
+                            else:
+                                sanitized_row[k] = v
+                        else:
+                            sanitized_row[k] = v
+                    else:
+                        sanitized_row[k] = v
+                writer.writerow(sanitized_row)
             return output.getvalue()
 
     def get_statistics(self) -> dict:

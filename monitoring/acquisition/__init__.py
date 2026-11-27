@@ -21,6 +21,14 @@ from monitoring.acquisition.security import (
     sanitize_uri,
     validate_video_target,
     extract_uri_credentials,
+    pin_uri_to_ip,
+)
+from monitoring.acquisition.egress_policy import (
+    EgressPolicy,
+    EgressEnforcementStatus,
+    PolicyConfigurationError,
+    check_egress_enforcement_status,
+    classify_ip,
 )
 from monitoring.acquisition.ffmpeg_adapter import FFmpegRTSPAdapter
 from monitoring.acquisition.onvif_adapter import (
@@ -52,6 +60,12 @@ __all__ = [
     "sanitize_uri",
     "validate_video_target",
     "extract_uri_credentials",
+    "pin_uri_to_ip",
+    "EgressPolicy",
+    "EgressEnforcementStatus",
+    "PolicyConfigurationError",
+    "check_egress_enforcement_status",
+    "classify_ip",
     "FFmpegRTSPAdapter",
     "ONVIFDiscoveryService",
     "ONVIFCandidate",

@@ -192,6 +192,9 @@ class IntegrityLogEntry(Base):
     entry_hash = Column(String(64), nullable=False)
     hmac_sig = Column(String(64), nullable=True)
     created_at = Column(Float, default=time.time)
+    format_version = Column(Integer, nullable=False, default=1)
+    algorithm = Column(String(64), nullable=True)
+    key_id = Column(String(64), nullable=True)
 
     def to_dict(self):
         return {
@@ -203,7 +206,10 @@ class IntegrityLogEntry(Base):
             "prev_hash": self.prev_hash,
             "entry_hash": self.entry_hash,
             "hmac_sig": self.hmac_sig,
-            "created_at": self.created_at
+            "created_at": self.created_at,
+            "format_version": getattr(self, "format_version", 1),
+            "algorithm": getattr(self, "algorithm", None),
+            "key_id": getattr(self, "key_id", None)
         }
 
 class DecryptionRequestModel(Base):
