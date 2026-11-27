@@ -13,14 +13,18 @@
 - **Prérequis validés :**
   - 100% des tests passés (371 / 371).
   - 0 secret détecté dans le commit.
-  - Confinement strict des données persistantes (`storage/security_monitor.db` non suivi et non modifié rétroactivement).
+  - Confinement strict des données persistantes (`storage/security_monitor.db` non suivi et non altéré rétroactivement).
   - Validation navigateur Chromium réussie (0 erreur console, 0 violation CSP).
 
 ## 2. Métadonnées du Commit
+- **SHA du commit local :** `f7981aa361844df7dd15f853ef3a99e6207781c9`
 - **Message du commit :** `security: complete PRO-13 controlled remediation and live qualification`
-- **Fichiers inclus :** Code applicatif, adapters NVR, politiques Egress, scripts pare-feu, suite de tests et documentation de sécurité.
+- **Fichiers inclus :** 172 fichiers modifiés/créés (13,399 insertions, 185 suppressions).
 - **Fichiers exclus :** `.env`, bases de données SQLite, caches, captures et enregistrements d'exécution.
 
-## 3. Statut de Synchronisation
-- **Statut de l'envoi :** Succès (`RELEASE_PUSHED_SUCCESSFULLY`).
-- **Vérification distante :** Le HEAD distant `refs/heads/main` est aligné sur le commit local validé.
+## 3. Statut de Synchronisation Distante
+- **Commande exécutée :** `git push origin main`
+- **Résultat :** `b339a9c..f7981aa  main -> main`
+- **Vérification distante (`git ls-remote`) :**
+  `f7981aa361844df7dd15f853ef3a99e6207781c9    refs/heads/main`
+- **Statut final :** **RELEASE_PUSHED_SUCCESSFULLY**
